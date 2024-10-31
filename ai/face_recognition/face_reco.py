@@ -4,8 +4,6 @@ import time
 import cv2
 import numpy as np
 import os
-import sys
-sys.path.append('/home/hz/server/ai_sport_server')
 from ai.face_recognition.normal import normalize
 from ai.face_recognition.face_analysis import FaceAnalysis
 from ai.face_recognition.face_quality.face_quality import face_quality_assessment
