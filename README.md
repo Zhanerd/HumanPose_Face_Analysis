@@ -1,4 +1,4 @@
-# pose-face-det-reco
+# HumanPose_Face_Analysis
 This project contain face,huamn-pose detect(yolo,rtmdet,etc) and recognition(arcface,rtmpose,etc). 
 Try to provide inference on onnx,tensorRT,rknn...
 # Update Log
