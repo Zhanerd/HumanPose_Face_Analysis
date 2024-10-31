@@ -2,8 +2,7 @@ import numpy as np
 import os.path as osp
 import cv2
 import torch
-# import sys
-# sys.path.append('/home/hz/server/ai_sport_server')
+
 from ai.torch2trt.torch2trt import TRTModule
 
 class RetinaFace:
