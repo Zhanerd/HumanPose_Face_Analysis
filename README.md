@@ -6,7 +6,7 @@ Try to provide inference on onnx,tensorRT,rknn...
 # License
 This repository is licensed under the Apache-2.0 License.
 # Reference
-Insightface;;;;;;https://github.com/deepinsight/insightface  
-MMpose;;;;;;https://github.com/open-mmlab/mmpose  
-rtmlib;;;;;;https://github.com/Tau-J/rtmlib  
-FaceImageQuality;;;;;;https://github.com/pterhoer/FaceImageQuality
+Insightface https://github.com/deepinsight/insightface  
+FaceImageQuality https://github.com/pterhoer/FaceImageQuality
+MMpose https://github.com/open-mmlab/mmpose  
+rtmlib https://github.com/Tau-J/rtmlib  
