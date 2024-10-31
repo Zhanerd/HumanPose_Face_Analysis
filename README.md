@@ -10,3 +10,4 @@ Insightface https://github.com/deepinsight/insightface
 FaceImageQuality https://github.com/pterhoer/FaceImageQuality  
 MMpose https://github.com/open-mmlab/mmpose  
 rtmlib https://github.com/Tau-J/rtmlib  
+deep_sort_pytorch https://github.com/ZQPei/deep_sort_pytorch
