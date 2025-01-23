@@ -13,7 +13,7 @@ Try to provide inference on onnx,tensorRT,rknn...
 In this project, u dont need to install insightface or ultralyitcs or paddlepaddle or mmpose!
 # 
 # USAGE
-    There will introduce how to use it.
+There will briefly introduce how to use it.
 ## Face
     Face, check face_reco.py. See the detail of the class FaceRecognition. And '__main__' is the demo. 
     Also provide single choose for face det,recognition,direction,quality(see the file for how to use).
