@@ -11,7 +11,6 @@ Try to provide inference on onnx,tensorRT,rknn...
     onnxruntime-gpu == 1.18.0
     tensorrt == 8.6.1
 In this project, u dont need to install insightface or ultralyitcs or paddlepaddle or mmpose!
-# 
 # USAGE
 There will briefly introduce how to use it.
 ## Face
@@ -36,3 +35,4 @@ FaceImageQuality            https://github.com/pterhoer/FaceImageQuality
 MMpose                      https://github.com/open-mmlab/mmpose  
 rtmlib                      https://github.com/Tau-J/rtmlib  
 deep_sort_pytorch           https://github.com/ZQPei/deep_sort_pytorch
+PaddleOCR                   https://github.com/PaddlePaddle/PaddleOCR
