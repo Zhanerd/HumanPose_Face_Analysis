@@ -2,7 +2,7 @@
 This project contain face,huamn-pose detect(yolo,rtmdet,etc) and recognition(arcface,rtmpose,etc). 
 Try to provide inference on onnx,tensorRT,rknn...  
 # Update Log
-2025/01/23  Add some new feature(Ocr,TTS,YOLO_obb). 
+2025/01/23  Add some new feature(Ocr,TTS,YOLO_obb). (TTS目前仅仅支持中文)
 
 2024/10/31  Support Onnx and tensorRT(8.6.1) inference.
 # Requirements
@@ -25,7 +25,7 @@ Beside, there are some segment methods for human, such as PSPNet,yolo-seg,detins
 ## Ocr
 Ocr, check ppocr.py. See the detail of the class PaddlePaddleOcr. And '__main__' is the demo. 
 ## TTS
-Tts, check t2s.py. See the detail of the class Text2Speech. And '__main__' is the demo. 
+Tts, check t2s.py. See the detail of the class Text2Speech. And '__main__' is the demo. (Only cn)
 ## YOLO_obb
 YOLO_obb, use yolo_obb.py. See the detail of the class YOLO_OBB. And '__main__' is the demo. 
 # License
