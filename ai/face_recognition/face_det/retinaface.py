@@ -2,7 +2,8 @@ import numpy as np
 import os.path as osp
 import cv2
 import torch
-
+# import sys
+# sys.path.append('/home/hz/server/ai_sport_server')
 from ai.torch2trt.torch2trt import TRTModule
 
 class RetinaFace:
@@ -263,6 +264,18 @@ class RetinaFace:
             order = order[inds + 1]
 
         return keep
+
+    def release(self):
+        if self.backend == 'onnxruntime':
+            del self.session
+        elif self.backend == 'tensorrt':
+            del self.session.engine
+            del self.session.context
+            import gc
+            gc.collect()
+        else:
+            pass
+        self.session = None
 def distance2kps(points, distance, max_shape=None):
     """Decode distance prediction to bounding box.
 

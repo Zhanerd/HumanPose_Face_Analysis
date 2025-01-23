@@ -13,9 +13,8 @@ class YOLOX(BaseTool):
                  model_input_size: tuple = (640, 640),
                  nms_thr=0.45,
                  score_thr=0.7,
-                 gpu_id: int = 0,
-                 backend: str = "tensorrt"):
-        super().__init__(model_path=model_path,backend=backend,
+                 gpu_id: int = 0):
+        super().__init__(model_path=model_path,
                          model_input_size=model_input_size,
                          gpu_id=gpu_id)
         self.nms_thr = nms_thr

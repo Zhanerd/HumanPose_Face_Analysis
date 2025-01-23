@@ -15,9 +15,8 @@ class RTMPose(BaseTool):
                  mean: tuple = (123.675, 116.28, 103.53),
                  std: tuple = (58.395, 57.12, 57.375),
                  to_openpose: bool = False,
-                 gpu_id: int = 0,
-                 backend: str = "tensorrt"):
-        super().__init__(backend=backend, model_path=model_path,model_input_size=model_input_size, mean=mean, std=std,
+                 gpu_id: int = 0):
+        super().__init__(model_path=model_path,model_input_size=model_input_size, mean=mean, std=std,
                          gpu_id=gpu_id)
         self.to_openpose = to_openpose
 

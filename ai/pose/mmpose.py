@@ -1,9 +1,9 @@
 import time
 import sys
 sys.path.append('../../')
-from ai.pose import RTMDet, RTMPose, YOLOX, YOLOv8
+from ai.pose import RTMDet, RTMPose, YOLOX, YOLOv8, YOLOv8_byteTrack
 from ai.pose.tracker.deep_sort import DeepSort
-
+from ai.PSPNet import PSPNet
 import cv2
 import os
 
@@ -35,6 +35,7 @@ class TopDownEstimation:
         :param gpu_id: 小于0则为CPU,大于等于0则为GPU
         :param det_path: 人体检测模型路径
         :param pose_path: 姿态估计模型路径
+        :param track_path: 姿态估计模型路径
         """
         self.gpu_id = gpu_id
         self.init_statue = False
@@ -45,56 +46,44 @@ class TopDownEstimation:
         self.tracker = None
         det_size = (640,640)
 
-        if "onnx" in det_path:
-            det_backend = "onnxruntime"
-        elif "engine" in det_path:
-            det_backend = "tensorrt"
-        else:
-            det_backend = "no support now"
-        if "onnx" in pose_path:
-            pos_backend = "onnxruntime"
-        elif "engine" in pose_path:
-            pos_backend = "tensorrt"
-        else:
-            pos_backend = "no support now"
-        if os.path.exists(det_path) and os.path.exists(pose_path):
+        if os.path.exists(det_path) and det_path != "":
             if "yolo" in det_path:
                 if 'yolox' in det_path:
                     if "tiny" in det_path:
                         det_size = (416,416)
                     else:
                         det_size = (640,640)
-                    self.det_model = YOLOX(model_path=det_path, gpu_id=gpu_id,model_input_size=det_size,backend=det_backend)
-                elif 'yolov8' in det_path:
+                    self.det_model = YOLOX(model_path=det_path, gpu_id=gpu_id,model_input_size=det_size)
+                elif 'yolov8_m' in det_path:
                     det_size = (640, 640)
-                    self.det_model = YOLOv8(model_path=det_path, gpu_id=gpu_id,model_input_size=det_size,backend=det_backend)
+                    self.det_model = YOLOv8(model_path=det_path, gpu_id=gpu_id,model_input_size=det_size)
+                elif 'yolov8_n' in det_path:
+                    det_size = (640, 640)
+                    self.det_model = YOLOv8_byteTrack(model_path=det_path)
+                    print('bytetrack is combine with yolov8_n')
             else:
                 if "hand" in det_path or 'end' in det_path:
                     det_size = (320, 320)
                 else:
                     det_size = (640, 640)
-                self.det_model = RTMDet(model_path=det_path, gpu_id=gpu_id,model_input_size=det_size,backend=det_backend)
-
+                self.det_model = RTMDet(model_path=det_path, gpu_id=gpu_id,model_input_size=det_size)
+        else:
+            print("det_path no exist", det_path)
+        if os.path.exists(pose_path) and pose_path != "":
             if "hand" in pose_path:
                 in_size = (256,256)
-            elif "l_wholebody" in pose_path:
+            elif "wholebody" in pose_path or "l_halpe26" in pose_path or "m_halpe262" in pose_path:
                 in_size = (288,384)
             else:
                 in_size = (192,256)
-
-            self.pose_model = RTMPose(model_path=pose_path, gpu_id=gpu_id,model_input_size=in_size,backend=pos_backend)
+            self.pose_model = RTMPose(model_path=pose_path, gpu_id=gpu_id,model_input_size=in_size)
             self.init_statue = True
         else:
-            print(det_path, pose_path)
+            print("pose_path no exist", pose_path)
         if track_path != "" and os.path.exists(track_path):
-            if "onnx" in track_path:
-                tra_backend = "onnxruntime"
-            elif "engine" in track_path:
-                tra_backend = "tensorrt"
-            else:
-                tra_backend = "no support now"
-            self.tracker = DeepSort(model_path=track_path, gpu_id=gpu_id,backend=tra_backend)
-
+            self.tracker = DeepSort(model_path=track_path, gpu_id=gpu_id)
+        else:
+            print("track_path no exist", track_path)
         test = np.ones(shape=det_size, dtype=np.uint8)
         test = np.expand_dims(test, axis=-1)
         test = np.repeat(test, 3, axis=-1)
@@ -119,6 +108,13 @@ class TopDownEstimation:
             results['scores'] = scores
             results['cls'] = clses
             return results
+        elif type(self.det_model).__name__=='YOLOv8_byteTrack':
+            dets, scores, clses,track_ids = self.det_model(img, score_thr=score_thr,cls=cls)
+            results['det'] = dets
+            results['scores'] = scores
+            results['cls'] = clses
+            results['track_ids'] = track_ids
+            return results
         else:
             dets, scores = self.det_model(img, score_thr=score_thr)
             results['det'] = dets
@@ -139,24 +135,30 @@ class TopDownEstimation:
         results = list()
         if not self.init_statue:
             return results
-        det_time = time.time()
         if type(self.det_model).__name__=='YOLOv8':
             det, det_score,cls = self.det_model(img, score_thr=score_thr)
-            det = [box for i,box in enumerate(det) if cls[i] == 0]
+            det = [box.tolist() for i,box in enumerate(det) if cls[i] == 0]
+            track_ids = []
+            if track and self.tracker is not None:
+                det, track_ids = self.track(img, det)
+            # print('track',track_ids)
+        elif type(self.det_model).__name__=='YOLOv8_n':
+            det, det_score,cls,track_ids = self.det_model(img, score_thr=score_thr)
+            det = det.tolist()
+            if track and self.tracker is not None:
+                det, track_ids = self.track(img, det)
+                # print('track',track_ids)
         else:
+            det_time = time.time()
             det, det_score = self.det_model(img, score_thr=score_thr)
-        print("det time:", time.time() - det_time)
-        # det_results = self.det_model(img, score_thr=score_thr)
-        # det = det_results['det']
-        # det_score = det_results['scores']
-        track_ids = []
-        track_time = time.time()
-        if track and self.tracker is not None:
-            det, track_ids = self.track(img, det)
-        print("track time:", time.time() - track_time)
-        kps_time = time.time()
+            # print('det_time',det_time-time.time())
+            track_ids = []
+            if track and self.tracker is not None:
+                det, track_ids = self.track(img, det)
+                # print('track',track_ids)
+        # pose_time = time.time()
         kps, kps_score = self.pose_model(img, det)
-        print("kps time:", time.time() - kps_time)
+        # print('pose_time',pose_time - time.time())
         det_score = det_score[:len(det)]
         for i in range(len(det)):
             result = dict()
@@ -165,30 +167,46 @@ class TopDownEstimation:
                 result['det_score'] = det_score[i]
             result['kps'] = kps[i]
             result['kps_score'] = kps_score[i]
-            result['track_id'] = 0
-            if track and self.tracker is not None:
-                result['track_id'] = track_ids[i]
+            if len(track_ids)>0:
+                result['track_id'] = int(track_ids[i])
+            else:
+                result['track_id'] = 0
             results.append(result)
         return results
 
 
     def release(self):
-        self.det_model.release()
-        self.pose_model.release()
+        if self.det_model is not None:
+            self.det_model.release()
+        if self.pose_model is not None:
+            self.pose_model.release()
 
 if __name__ == '__main__':
-    pose = TopDownEstimation(det_path=r'D:\ai\ai\models\yolov8_m.engine',
+    pose = TopDownEstimation(det_path=r'C:\Users\84728\Desktop\yolov8_m11_e70.onnx', #C:\Users\84728\Desktop\yolov8_11_e51.onnx  D:\ai\ai\models\yolov8.onnx
                              pose_path=r'D:\ai\ai\models\rtmpose_m_halpe262.engine',
                              track_path=r'D:\ai\ai\models\deepsort.engine')
-    # cap = cv2.VideoCapture(0)
-    runway_info = {
-        "1": [[28, 900], [308, 900], [636, 990], [90, 1024]],
-        "2": [[308, 900], [776, 868], [1148, 952], [636, 990]],
-        "3": [[776, 868], [1314, 850], [1632, 914], [1148, 952]],
-        "4": [[1314, 850], [1766, 824], [2086, 880], [1632, 914]],
-        "5": [[1766, 824], [2170, 796], [2520, 850], [2086, 880]]
-    }
-    cap = cv2.VideoCapture(r'D:\replay\10月22日(1).mp4')
+    # pspnet = PSPNet(onnx_model=r'D:\ai\ai\PSPNet.onnx')
+    # frame = cv2.imread(r'C:\Users\84728\Desktop\no_detection\StandingLongJump_1846809887086522369_1729843217_190.jpg')
+    # results = pose.estimate(frame, 0.1, True)
+    # print(len(results))
+    # for result in results:
+    #     frame = cv2.rectangle(frame, (int(result['det'][0]), int(result['det'][1])), (int(result['det'][2]), int(result['det'][3])), (0, 255, 0),3)
+    #     frame = cv2.putText(frame, str(result['track_id']), (int(result['det'][0]), int(result['det'][1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+    #     for ids,kps in enumerate(result['kps']):
+    #         frame = cv2.circle(frame, (int(kps[0]), int(kps[1])), 3, (0, 0, 255), -1)
+    #         frame = cv2.putText(frame, str(ids), (int(kps[0]), int(kps[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 222, 255),
+    #                             2)
+    # cv2.imshow("frame", frame)
+    # cv2.waitKey(0)
+    # # cap = cv2.VideoCapture(0)
+    # runway_info = {
+    #     "1": [[28, 900], [308, 900], [636, 990], [90, 1024]],
+    #     "2": [[308, 900], [776, 868], [1148, 952], [636, 990]],
+    #     "3": [[776, 868], [1314, 850], [1632, 914], [1148, 952]],
+    #     "4": [[1314, 850], [1766, 824], [2086, 880], [1632, 914]],
+    #     "5": [[1766, 824], [2170, 796], [2520, 850], [2086, 880]]
+    # }
+    cap = cv2.VideoCapture(r'C:\Users\84728\Desktop\802125.mp4')
     frame_idx = 0
     while cap.isOpened():
         success, frame = cap.read()
@@ -209,21 +227,26 @@ if __name__ == '__main__':
         #     frame = cv2.putText(frame, str(cls[i]),  (int(box[0]), int(box[1])),
         #                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
         for result in results:
+            # body = frame[int(result['det'][1]):int(result['det'][3]), int(result['det'][0]):int(result['det'][2])]
+            # pspnet_result = pspnet(body)
+            # pspnet_result = pspnet_result*10
+            # cv2.imshow("pspnet_result", pspnet_result)
+            # cv2.waitKey(0)
             frame = cv2.rectangle(frame, (int(result['det'][0]), int(result['det'][1])), (int(result['det'][2]), int(result['det'][3])), (0, 255, 0),3)
             frame = cv2.putText(frame, str(result['track_id']), (int(result['det'][0]), int(result['det'][1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             for ids,kps in enumerate(result['kps']):
                 frame = cv2.circle(frame, (int(kps[0]), int(kps[1])), 3, (0, 0, 255), -1)
                 frame = cv2.putText(frame, str(ids), (int(kps[0]), int(kps[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 222, 255),
                                     2)
-        for rw_id, runway in runway_info.items():
-            runway = np.array(runway, dtype=np.int32)
-            for i,run in enumerate(runway):
-                runway[i] =(int(run[0]*(1920/2560)),(run[1]*(1080/1440)))
-            frame = cv2.polylines(frame, [runway], True, (0, 255, 0), 2)
-            frame = cv2.putText(frame, str(rw_id), (int(runway[0][0]),int(runway[0][1])), cv2.FONT_HERSHEY_SIMPLEX, 1,(0, 255, 255), 3)
+        # for rw_id, runway in runway_info.items():
+        #     runway = np.array(runway, dtype=np.int32)
+        #     for i,run in enumerate(runway):
+        #         runway[i] =(int(run[0]*(1920/2560)),(run[1]*(1080/1440)))
+        #     frame = cv2.polylines(frame, [runway], True, (0, 255, 0), 2)
+        #     frame = cv2.putText(frame, str(rw_id), (int(runway[0][0]),int(runway[0][1])), cv2.FONT_HERSHEY_SIMPLEX, 1,(0, 255, 255), 3)
 
         # for i in l:
         #     frame = cv2.putText(frame, str(i[4]), (int(i[0]), int(i[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
         cv2.imshow("frame", frame)
-        cv2.waitKey(1)
+        cv2.waitKey(0)
         #print(len(results))

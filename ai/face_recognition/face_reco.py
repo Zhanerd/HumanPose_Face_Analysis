@@ -1,22 +1,28 @@
 import math
 import time
-
+import torch
 import cv2
 import numpy as np
 import os
+import sys
+
+sys.path.append('/../../')
 from ai.face_recognition.normal import normalize
 from ai.face_recognition.face_analysis import FaceAnalysis
 from ai.face_recognition.face_quality.face_quality import face_quality_assessment
+from ai.face_recognition.face_direction.face_direct import FaceDirection
 
 class FaceRecognition:
-    def __init__(self, det_path="", reg_path="", gpu_id=0, det_thresh=0.5, det_size=(640, 640),quality_path=None):
+    def __init__(self, det_path="", reg_path="", gpu_id=0, det_thresh=0.5, det_size=(640, 640), quality_path=None, direct_path=None):
         """
         人脸识别工具类参数
         :param det_path: 人脸检测模型路径
-        :param reg__path: 人脸特征提取模型路径
+        :param reg_path: 人脸特征提取模型路径
         :param gpu_id: <0为cpu,>=0为gpu
         :param det_thresh: 检测阈值
         :param det_size: 检测模型图片大小
+        :param quality_path: 人脸质量评分模型
+        :param direct_path: 人脸朝向模型
         """
         self.quality_model = None
         self.gpu_id = gpu_id
@@ -26,7 +32,7 @@ class FaceRecognition:
 
         # 是否进行人脸质量检测
         self.quality_path = quality_path
-
+        self.direct_path = direct_path
         # 加载人脸识别模型
         self.is_init = False
         self.init(det_path=det_path, reg_path=reg_path, gpu_id=gpu_id)
@@ -47,19 +53,27 @@ class FaceRecognition:
         if self.quality_path is not None:
             self.quality_model = face_quality_assessment(quality_path=self.quality_path, gpu_id=gpu_id)
 
+        if self.direct_path is not None:
+            self.direct_path = FaceDirection(direct_path=self.direct_path, gpu_id=gpu_id)
+
         test = np.ones(shape=self.det_size, dtype=np.uint8)
         test = np.expand_dims(test, axis=-1)
         test = np.repeat(test, 3, axis=-1)
         self.detect(test, det_thresh=0.4, nms_thr=0.5)
+
     def init_state(self):
         return self.is_init
 
     # 检测人脸
-    def detect(self, image, det_thresh=0.5, nms_thr=None, top_n=0, quality=False, quality_thre=0.5):
-        # w,h = image.shape[:2]
-        # if w < self.det_size[0] and h < self.det_size[1]:
-        # img = cv2.copyMakeBorder(image, 0, 528, 0, 368, cv2.BORDER_CONSTANT, value=[0, 0, 0])
-        faces = self.model.batch_get(image, det_thresh, nms_thr)
+    def detect(self, image, det_thresh=0.5, nms_thr=None, top_n=1, quality=False, quality_thre=0.5,std_thre=0.35):
+        w,h = image.shape[:2]
+        if w < self.det_size[0] or h < self.det_size[1]:
+            padw = self.det_size[0] - w
+            padh = self.det_size[0] - h
+            img = cv2.copyMakeBorder(image, 0, max(padw,0), 0, max(padh,0), cv2.BORDER_CONSTANT, value=[0, 0, 0])
+            faces = self.model.batch_get(img, det_thresh, nms_thr)
+        else:
+            faces = self.model.batch_get(image, det_thresh, nms_thr)
         # 筛选最大的top_n个人脸
         if top_n > 0 and top_n < len(faces):
             def face_size(face):
@@ -80,34 +94,107 @@ class FaceRecognition:
             if self.quality_model and quality:
                 result["bbox"] = [0 if i < 0 else i for i in result["bbox"]]
                 face_img = image[result["bbox"][1]:result["bbox"][3], result["bbox"][0]:result["bbox"][2]]
-                pitch, yaw, roll = self.face_direction(result, image.shape[:2])
+                if self.direct_path is not None:
+                    pitch, yaw, roll = self.direct_path.inference(face_img)
+                else:
+                    pitch, yaw, roll = self.face_direction(result, image.shape[:2])
                 scores = self.quality_model.inference(face_img)
                 if not self.is_centered(result["bbox"], width, height):
-                    result["error_code"] = 100       # 人脸未在中间
+                    result["error_code"] = 100  # 人脸未在中间
                     result["error_message"] = "人脸未在中间"
                 elif not self.bbox_ratio(result["bbox"], width, height):
-                    result["error_code"] = 200       # 人脸框过小
+                    result["error_code"] = 200  # 人脸框过小
                     result["error_message"] = "人脸框过小"
                 elif 75 < abs(pitch) < 80:
                     # print("pitch",pitch)
-                    result["error_code"] = 301     # 仰角过大
-                    result["error_message"] = "仰角过大"
+                    result["error_code"] = 301  # 仰角过大
+                    result["error_message"] = "仰角过大 {}".format(abs(pitch))
                 elif 150 > abs(yaw) > 80:
                     # print("yaw", yaw)
-                    result["error_code"] = 302     # 偏航角过大
-                    result["error_message"] = "偏航角过大"
+                    result["error_code"] = 302  # 偏航角过大
+                    result["error_message"] = "偏航角过大 {}".format(abs(yaw))
                 elif 65 < abs(roll) < 70:
                     # print("roll", roll)
-                    result["error_code"] = 303     # 翻滚角过大
-                    result["error_message"] = "翻滚角过大"
+                    result["error_code"] = 303  # 翻滚角过大
+                    result["error_message"] = "翻滚角过大 {}".format(abs(roll))
                 else:
                     score = round(np.mean(scores), 3)
                     std = np.std(scores)
                     result["scores"] = score
-                    if score < quality_thre or std > 0.35:  # 加入方差确保质量的稳定
-                        print("face_scores", std,score)
-                        result["error_code"] = 400       # 人脸置信度过低，可解释为有遮挡或者光线不良或者清晰度不佳
-                        result["error_message"] = "有遮挡或者光线不良或者清晰度不佳"
+                    if score < quality_thre or std > std_thre:  # 加入方差确保质量的稳定
+                        # print("face_scores", std, score)
+                        result["error_code"] = 400  # 人脸置信度过低，可解释为有遮挡或者光线不良或者清晰度不佳
+                        result["error_message"] = "有遮挡或者光线不良或者清晰度不佳,  score : {}, std: {}".format(score, std)
+                    else:
+                        result["error_code"] = 0
+                        result["error_message"] = "success"
+            result["det_score"] = round(float(face.det_score), 2)
+            embedding = np.array(face.embedding).reshape((1, -1))
+            embedding = normalize(embedding)
+            result["embedding"] = embedding
+            results.append(result)
+        return results
+
+    def detect_queue(self, image, det_thresh=0.5, nms_thr=None, top_n=1, quality=False, quality_thre=0.5,std_thre=0.35):
+        w,h = image.shape[:2]
+        if w < self.det_size[0] or h < self.det_size[1]:
+            padw = self.det_size[0] - w
+            padh = self.det_size[0] - h
+            img = cv2.copyMakeBorder(image, 0, max(padw,0), 0, max(padh,0), cv2.BORDER_CONSTANT, value=[0, 0, 0])
+            faces = self.model.batch_get_queue(img, det_thresh, nms_thr)
+        else:
+            faces = self.model.batch_get_queue(image, det_thresh, nms_thr)
+        # 筛选最大的top_n个人脸
+        if top_n > 0 and top_n < len(faces):
+            def face_size(face):
+                size = (face["bbox"][2] - face["bbox"][0]) * (face["bbox"][3] - face["bbox"][1])
+                return -1 * size  # 从大到小排序
+
+            faces.sort(key=face_size)
+            faces = faces[:top_n]
+        height, width = image.shape[:2]
+        results = list()
+        for face in faces:
+            result = dict()
+            result["error_code"] = 0
+            result["error_message"] = "success"
+            # 获取人脸属性
+            result["bbox"] = np.array(face.bbox).astype(np.int32).tolist()
+            result["kps"] = np.array(face.kps).astype(np.int32).tolist()
+            if self.quality_model and quality:
+                result["bbox"] = [0 if i < 0 else i for i in result["bbox"]]
+                face_img = image[result["bbox"][1]:result["bbox"][3], result["bbox"][0]:result["bbox"][2]]
+                if self.direct_path is not None:
+                    pitch, yaw, roll = self.direct_path.inference(face_img)
+                else:
+                    pitch, yaw, roll = self.face_direction(result, image.shape[:2])
+                scores = self.quality_model.inference(face_img)
+                if not self.is_centered(result["bbox"], width, height):
+                    result["error_code"] = 100  # 人脸未在中间
+                    result["error_message"] = "人脸未在中间"
+                elif not self.bbox_ratio(result["bbox"], width, height):
+                    result["error_code"] = 200  # 人脸框过小
+                    result["error_message"] = "人脸框过小"
+                elif 75 < abs(pitch) < 80:
+                    # print("pitch",pitch)
+                    result["error_code"] = 301  # 仰角过大
+                    result["error_message"] = "仰角过大 {}".format(abs(pitch))
+                elif 150 > abs(yaw) > 80:
+                    # print("yaw", yaw)
+                    result["error_code"] = 302  # 偏航角过大
+                    result["error_message"] = "偏航角过大 {}".format(abs(yaw))
+                elif 65 < abs(roll) < 70:
+                    # print("roll", roll)
+                    result["error_code"] = 303  # 翻滚角过大
+                    result["error_message"] = "翻滚角过大 {}".format(abs(roll))
+                else:
+                    score = round(np.mean(scores), 3)
+                    std = np.std(scores)
+                    result["scores"] = score
+                    if score < quality_thre or std > std_thre:  # 加入方差确保质量的稳定
+                        # print("face_scores", std, score)
+                        result["error_code"] = 400  # 人脸置信度过低，可解释为有遮挡或者光线不良或者清晰度不佳
+                        result["error_message"] = "有遮挡或者光线不良或者清晰度不佳,  score : {}, std: {}".format(score, std)
                     else:
                         result["error_code"] = 0
                         result["error_message"] = "success"
@@ -121,6 +208,9 @@ class FaceRecognition:
     # 比对特征
     def match_feature(self, in_embedding_np, group_embedding_np, label_list, thre=0.75):
         match_infos = []
+        if not isinstance(in_embedding_np, np.ndarray) or not isinstance(group_embedding_np, np.ndarray):
+            print("in_embedding_np or group_embedding_np is not np.ndarray")
+            return match_infos
         if label_list == [] or group_embedding_np.size == 0 or in_embedding_np.size == 0:
             return match_infos
 
@@ -145,10 +235,52 @@ class FaceRecognition:
             match_infos.append(match_info)
         return match_infos
 
+    def match_feature_tensor_optimized(self, group_id, embedding, thre=0.75):
+        # if not label_list or group_embedding.size == 0 or in_embedding.size == 0:
+        #     return []
+        # # 将张量移动到 GPU 上，使用 float32，并确保内存连续
+        # ### 如果提前转移到gpu会更快
+        # in_embedding = torch.from_numpy(in_embedding).to('cuda').float().contiguous()
+        # group_embedding = torch.from_numpy(group_embedding).to('cuda').float().contiguous()
+        match_infos = []
+        dict_features = self.query_group_features(group_id)
+        if dict_features is None:
+            return match_infos
+        group_embedding = dict_features["features"]
+        if type(group_embedding) == np.ndarray:
+            group_embedding = torch.from_numpy(group_embedding).to('cuda').float().contiguous()
+        if type(embedding) == np.ndarray:
+            embedding = torch.from_numpy(embedding).to('cuda').float().contiguous()
+        label_list = dict_features["pids"]
+        faceid_list = dict_features["fids"]
+        with torch.no_grad():
+            # 计算余弦相似度
+            cos_similarity = torch.matmul(embedding, group_embedding.T)
+            # 找出每一行的最大值及其索引
+            max_values, max_indices = torch.max(cos_similarity, dim=1)
+
+            for i in range(0, max_values.shape[0], 1):
+                match_info = dict()
+                similarity = (max_values[i] + 1) / 2
+                # print("similarity : ")
+                # print(similarity)
+                index = max_indices[i]
+                if similarity < thre:
+                    match_info["person_id"] = ""
+                    match_info["face_id"] = ""
+                    # match_info["similarity"] = 0
+                else:
+                    match_info["person_id"] = label_list[index]
+                    match_info["face_id"] = faceid_list[index]
+                match_info["similarity"] = round(similarity.cpu().tolist(), 3)
+                match_infos.append(match_info)
+        return match_infos
+
+
     def is_centered(self, bbox, img_width, img_height, threshold_percentage=0.15):
         x1, y1, x2, y2 = bbox
-        bbox_center_x = x1 + (x2-x1) / 2
-        bbox_center_y = y1 + (y2-y1) / 2
+        bbox_center_x = x1 + (x2 - x1) / 2
+        bbox_center_y = y1 + (y2 - y1) / 2
         img_center_x = img_width / 2
         img_center_y = img_height / 2
 
@@ -162,9 +294,9 @@ class FaceRecognition:
         else:
             return False
 
-    def bbox_ratio(self, bbox, img_width, img_height,threshold=0.05):
+    def bbox_ratio(self, bbox, img_width, img_height, threshold=0.05):
         x1, y1, x2, y2 = bbox
-        bbox_area = (x2-x1) * (y2-y1)
+        bbox_area = (x2 - x1) * (y2 - y1)
         img_area = img_width * img_height
         ratio = bbox_area / img_area
 
@@ -185,12 +317,12 @@ class FaceRecognition:
         ], dtype=np.float32)
         # 3D model points.
         model_points = np.array([
-            (0.0, 0.0, 0.0),            # Nose tip
-            (-225.0, 170.0, -135.0),    # Left eye
-            (225.0, 170.0, -135.0),     # Right eye
-            (0.0, 0.0, 0.0),            # Nose tip
-            (-150.0, -150.0, -125.0),   # Left Mouth
-            (150.0, -150.0, -125.0),    # Right mouth
+            (0.0, 0.0, 0.0),  # Nose tip
+            (-225.0, 170.0, -135.0),  # Left eye
+            (225.0, 170.0, -135.0),  # Right eye
+            (0.0, 0.0, 0.0),  # Nose tip
+            (-150.0, -150.0, -125.0),  # Left Mouth
+            (150.0, -150.0, -125.0),  # Right mouth
         ], dtype=np.float32)
         # Camera internals
         focal_length = img_size[1]
@@ -240,27 +372,60 @@ class FaceRecognition:
         Z = int((roll / math.pi) * 180)
         # euler_angle_str = 'Y:{}, X:{}, Z:{}'.format(Y, X, Z)
         # print(euler_angle_str)
+        return Y, X, Z
 
-        return Y,X,Z
     def release(self):
         self.model.release()
 
 
 if __name__ == '__main__':
-    face_recognitio = FaceRecognition(det_path=r'D:\ai\ai\models\face_det_10g.onnx',
-                                      reg_path=r'D:\ai\ai\models\face_w600k_r50.onnx',
-                                      quality_path=r'D:\ai\ai\models\face_quality_assessment.onnx',
-                                      gpu_id=-1)
+    face_recognitio = FaceRecognition(det_path=r'D:\ai\ai\models\face_det_10g.engine',
+                                      reg_path=r'D:\ai\ai\models\face_w600k_r50.engine',
+                                      quality_path = r"D:\ai\ai\models\face_quality_assessment.onnx",
+                                      gpu_id=0)
     # #img = cv2.imdecode(np.fromfile('http://192.168.7.170:8077/file/20240829/814a4790ead94cfaae34b5f5029f6d4c.jpg', dtype=np.uint8), -1)
-    img = cv2.imread(r'D:\ai\ai\models\bcaa68ec0c3146f4b5b32c606ab0909a.png')
-    t1 = time.time()
-    results = face_recognitio.detect(img, det_thresh=0.4, nms_thr=0.5,quality=True)
-    print('face with quailty time ', time.time() - t1)
+    # img = cv2.imread(r'D:\ai\ai\models\bcaa68ec0c3146f4b5b32c606ab0909a.png')
+    # t1 = time.time()
+    # results = face_recognitio.detect(img, det_thresh=0.4, nms_thr=0.5, quality=True)
+    # print('face with quailty time ', time.time() - t1)
     # print(results)
-    t2 = time.time()
-    result2 = face_recognitio.detect(img, det_thresh=0.4, nms_thr=0.5,quality=False)
-    print('face time ', time.time() - t2)
 
+    # cap = cv2.VideoCapture(0)
+    # a = time.time()
+    # count = 0
+    # while count<10:
+    #     ret, frame = cap.read()
+    #     results = face_recognitio.detect_queue(frame, det_thresh=0.4, nms_thr=0.5, quality=True)
+    #     for result in results:
+    #         frame = cv2.rectangle(frame, (result['bbox'][0], result['bbox'][1]), (result['bbox'][2], result['bbox'][3]),
+    #                               (0, 0, 255), 2)
+    #     count += 1
+    #     cv2.imshow('a',frame)
+    #     cv2.waitKey(1)
+    # print('queue',time.time()-a)
+
+    frame = cv2.imread(r"C:\Users\84728\Desktop\test\t1.jpeg")
+    def normal_detect(frame):
+        count = 0
+        a = time.time()
+        while count<200:
+            # ret, frame = cap.read()
+            results = face_recognitio.detect(frame, det_thresh=0.4, nms_thr=0.5, quality=True)
+            count += 1
+
+        print('normal',time.time()-a)
+    def queue_detect(frame):
+        a = time.time()
+        count = 0
+        while count<200:
+            results = face_recognitio.detect_queue(frame, det_thresh=0.4, nms_thr=0.5, quality=True)
+            count += 1
+        face_recognitio.model.faces_queue = []
+        print('queue',time.time()-a)
+
+    for i in range(10):
+        normal_detect(frame)
+        queue_detect(frame)
     # face_quality = face_quality_assessment('ai/models/face-quality-assessment.onnx', gpu_id=-1)
     # from utils.FrameCapture import FrameCapture
     # cap = FrameCapture(frame_source="rtsp://admin:hz123456@192.168.20.102:554/Streaming/Channels/1")

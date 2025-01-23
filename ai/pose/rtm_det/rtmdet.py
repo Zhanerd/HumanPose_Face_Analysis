@@ -14,7 +14,6 @@ class RTMDet(BaseTool):
                  mean: tuple = (103.5300, 116.2800, 123.6750),
                  std: tuple = (57.3750, 57.1200, 58.3950),
                  gpu_id: int = 0,
-                 backend: str = "onnxruntime",
                  nms_thr: float = 0.5,
                  score_thr: float = 0.6,
                  ):
@@ -22,8 +21,7 @@ class RTMDet(BaseTool):
                          model_input_size=model_input_size,
                          mean=mean,
                          std=std,
-                         gpu_id=gpu_id,
-                         backend=backend)
+                         gpu_id=gpu_id)
         self.nms_thr = nms_thr
         self.score_thr = score_thr
 

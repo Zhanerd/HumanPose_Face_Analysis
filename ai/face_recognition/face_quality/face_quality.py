@@ -1,3 +1,4 @@
+import os.path
 import time
 
 import onnxruntime
@@ -52,14 +53,14 @@ class face_quality_assessment:
         self.gpu_id = gpu_id
         self.input_height = 112
         self.input_width = 112
-        if 'onnx' in quality_path:
+        if 'onnx' in os.path.basename(quality_path):
             if gpu_id >= 0:
                 providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
             else:
                 providers = ['CPUExecutionProvider']
             self.quality = onnxruntime.InferenceSession(quality_path, providers=providers)
             self.backend = 'onnxruntime'
-        elif 'engine' in quality_path:
+        elif 'engine' in os.path.basename(quality_path):
             import tensorrt as trt
             from ai.torch2trt import TRTModule
             logger = trt.Logger(trt.Logger.INFO)

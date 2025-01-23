@@ -120,6 +120,18 @@ class ArcFace:
             return
         return net_out
 
+    def release(self):
+        if self.backend == 'onnxruntime':
+            del self.session
+        elif self.backend == 'tensorrt':
+            del self.session.engine
+            del self.session.context
+            import gc
+            gc.collect()
+        else:
+            pass
+        self.session = None
+
 
 arcface_dst = np.array(
     [[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366],

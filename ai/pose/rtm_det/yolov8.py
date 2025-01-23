@@ -1,6 +1,5 @@
 from typing import List, Tuple
 import torch
-import torchvision
 
 import cv2
 import numpy as np
@@ -14,9 +13,8 @@ class YOLOv8(BaseTool):
                  model_input_size: tuple = (640, 640),
                  nms_thr=0.45,
                  score_thr=0.7,
-                 gpu_id: int = 0,
-                 backend: str = "tensorrt"):
-        super().__init__(model_path=model_path,backend=backend,
+                 gpu_id: int = 0):
+        super().__init__(model_path=model_path,
                          model_input_size=model_input_size,
                          gpu_id=gpu_id)
         self.nms_thr = nms_thr
@@ -138,6 +136,7 @@ class YOLOv8(BaseTool):
                 final_boxes = final_boxes[isbbox]
                 final_scores = final_scores[isbbox]
                 final_cls_inds = final_cls_inds[isbbox]
+                final_cls_inds = final_cls_inds.astype(np.int8)
                 ### 过滤超出边界的框
                 # filt = list(zip(final_boxes, final_scores))
                 # fil_boxes = list()

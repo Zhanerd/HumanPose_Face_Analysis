@@ -1,3 +1,5 @@
+import os.path
+
 import numpy as np
 import onnxruntime as rt
 import cv2
@@ -15,22 +17,24 @@ def preprocess(img):
 
 
 class Extractor:
-    def __init__(self, model_path,gpu_id,backend) -> None:
+    def __init__(self, model_path,gpu_id) -> None:
         self.input_names = ["input_1"]
         self.output_names = ["output_1"]
-        self.backend = backend
+        self.backend = None
         input_mean = 127.5
         input_std = 127.5
         self.input_mean = input_mean
         self.input_std = input_std
         self.input_size = (64, 128)
-        if backend == "onnxruntime":
+        if "onnx" in os.path.basename(model_path):
+            self.backend = "onnxruntime"
             if gpu_id >= 0:
                 providers = ["CUDAExecutionProvider","CPUExecutionProvider"]
             else:
                 providers = ["CPUExecutionProvider"]
             self.model = rt.InferenceSession(model_path, providers=providers)
-        elif backend == "tensorrt":
+        elif "engine" in os.path.basename(model_path):
+            self.backend = "tensorrt"
             logger = trt.Logger(trt.Logger.INFO)
             with open(model_path, 'rb') as f, trt.Runtime(logger) as runtime:
                 engine = runtime.deserialize_cuda_engine(f.read())

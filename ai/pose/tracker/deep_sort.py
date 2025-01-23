@@ -10,16 +10,17 @@ from .detection import Detection
 from .tracker import Tracker
 
 class DeepSort(object):
-    def __init__(self, model_path, max_dist=0.2, min_confidence=0.3, nms_max_overlap=1.0, max_iou_distance=0.7,
-                 max_age=70, n_init=3, nn_budget=100, gpu_id=0,backend="onnxruntime"):
+    def __init__(self, model_path, max_dist=0.4, min_confidence=0.2, nms_max_overlap=1.0, max_iou_distance=0.7,
+                 max_age=70, n_init=3, nn_budget=100, gpu_id=0):
         self.min_confidence = min_confidence
         self.nms_max_overlap = nms_max_overlap
 
-        self.extractor = Extractor(model_path,gpu_id,backend)
+        self.extractor = Extractor(model_path,gpu_id)
 
         max_cosine_distance = max_dist
         nn_budget = nn_budget
-        metric = NearestNeighborDistanceMetric("cosine", max_cosine_distance, nn_budget)
+        metric = NearestNeighborDistanceMetric("euclidean", max_cosine_distance, nn_budget)     #euclidean，cosine
+
         self.tracker = Tracker(metric, max_iou_distance=max_iou_distance, max_age=max_age, n_init=n_init)
 
     def update(self, bbox_xyxy, ori_img):
