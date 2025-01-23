@@ -3,6 +3,7 @@ This project contain face,huamn-pose detect(yolo,rtmdet,etc) and recognition(arc
 Try to provide inference on onnx,tensorRT,rknn...  
 # Update Log
 2025/01/23  Add some new feature(Ocr,TTS,YOLO_obb). 
+
 2024/10/31  Support Onnx and tensorRT(8.6.1) inference.
 # Requirements
     python >= 3.8
