@@ -5,10 +5,10 @@ Try to provide inference on onnx,tensorRT,rknn...
 2025/01/23  Add some new feature(Ocr,TTS,YOLO_obb). (TTS目前仅仅支持中文)  
 2024/10/31  Support Onnx and tensorRT(8.6.1) inference.
 # Requirements
-    python >= 3.8
-    torch == 2.1.1
-    onnxruntime-gpu == 1.18.0
-    tensorrt == 8.6.1
+    python>=3.8
+    torch==2.1.1
+    onnxruntime-gpu==1.18.0
+    tensorrt==8.6.1
 In this project, u dont need to install insightface or ultralyitcs or paddlepaddle or mmpose!
 # USAGE
 There will briefly introduce how to use it.
