@@ -2,8 +2,7 @@
 This project contain face,huamn-pose detect(yolo,rtmdet,etc) and recognition(arcface,rtmpose,etc). 
 Try to provide inference on onnx,tensorRT,rknn...  
 # Update Log
-2025/01/23  Add some new feature(Ocr,TTS,YOLO_obb). (TTS目前仅仅支持中文)
-
+2025/01/23  Add some new feature(Ocr,TTS,YOLO_obb). (TTS目前仅仅支持中文)  
 2024/10/31  Support Onnx and tensorRT(8.6.1) inference.
 # Requirements
     python >= 3.8
@@ -34,5 +33,5 @@ Insightface                 https://github.com/deepinsight/insightface
 FaceImageQuality            https://github.com/pterhoer/FaceImageQuality  
 MMpose                      https://github.com/open-mmlab/mmpose  
 rtmlib                      https://github.com/Tau-J/rtmlib  
-deep_sort_pytorch           https://github.com/ZQPei/deep_sort_pytorch
+deep_sort_pytorch           https://github.com/ZQPei/deep_sort_pytorch  
 PaddleOCR                   https://github.com/PaddlePaddle/PaddleOCR
