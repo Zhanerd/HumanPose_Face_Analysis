@@ -15,7 +15,7 @@ There will briefly introduce how to use it.
 ## Face
 Face, check face_reco.py. See the detail of the class FaceRecognition. And '__main__' is the demo. Also provide single choose for face det,recognition,direction,quality(see the file for how to use).  
 
-Model ### use face_det_10g for face detection;use face_w600k_r50 for face feature extraction;use face_quality_assessment for face quality assessment.
+Model ### use face_det_10g for face detection;use face_w600k_r50 for face feature extraction;use face_quality_assessment for face quality assessment.    
 Usage ### 
 
     # init model
