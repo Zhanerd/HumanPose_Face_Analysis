@@ -13,8 +13,42 @@ In this project, u dont need to install insightface or ultralyitcs or paddlepadd
 # USAGE
 There will briefly introduce how to use it.
 ## Face
-Face, check face_reco.py. See the detail of the class FaceRecognition. And '__main__' is the demo. 
-Also provide single choose for face det,recognition,direction,quality(see the file for how to use).
+Face, check face_reco.py. See the detail of the class FaceRecognition. And '__main__' is the demo. Also provide single choose for face det,recognition,direction,quality(see the file for how to use).  
+
+---
+Model ### use face_det_10g for face detection;use face_w600k_r50 for face feature extraction;use face_quality_assessment for face quality assessment.
+
+    # init model
+    det_path="your_path_face_det_10g"
+    reg_path="your_path_face_w600k_r50"
+    quality_path="your_path_face_quality_assessment"
+    face_recognitio = FaceRecognition(det_path=det_path,
+                                      reg_path=reg_path,
+                                      quality_path = quality_path,
+                                      gpu_id=0)
+    # init data
+    group_embedding = np.load("your_path_group_embedding")
+    group_id = np.load("your_path_group_id")
+    # detect face
+    frame = cv2.imread("img_path")
+    results = face_recognitio.detect(frame, quality=False)  
+    '''
+    results is a list of dict, each dict is a face, keys are follows:
+    bbox is a int32 numpy array of [x1,y1,x2,y2]
+    kps is a int32 numpy array of [x1,y1,x2,y2,x3,y3,x4,y4,x5,y5], representing the five facial landmarks
+    embedding is a float32 numpy array of 1x512
+    when quality is True, error_code and error_message will be returned, detail see the file
+    '''
+    # match face
+    for result in results:
+        # frame = cv2.rectangle(frame, (result['bbox'][0], result['bbox'][1]), (result['bbox'][2], result['bbox'][3]),(0, 0, 255), 2) ### if u wanna draw the face box, u can use this code 
+        in_embedding.append(result['embedding'])
+        match_info = face_recognitio.match_feature(result['embedding'], group_embedding, group_id, thre=0.7)
+    '''
+    match_info is a list of dict, each dict is a person, keys are follows:
+    person_id is a string, refer to group_id.
+    similarity is a float, show the max similarity.
+    '''
 ## Pose
 Pose, check mmpose.py. See the detail of the class TopDownEstimation. And '__main__' is the demo. 
 Also provide single choose for det(yolo,rtmdet),pose(rtmpose),track(deepsort)
