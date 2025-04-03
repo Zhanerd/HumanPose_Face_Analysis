@@ -1,0 +1,1 @@
+The onnx model file for tts such am_encoder, am_decoder, am_postnet, voc_melgan. Can be found in ai/models. 
