@@ -2,6 +2,7 @@
 This project contain face,huamn-pose detect(yolo,rtmdet,etc) and recognition(arcface,rtmpose,etc). 
 Try to provide inference on onnx,tensorRT,rknn...  
 # Update Log
+2025/04/03  U can download onnx models by google dirver. See details in models/readme. 
 2025/01/23  Add some new feature(Ocr,TTS,YOLO_obb). (TTS目前仅仅支持中文，且encoder还不能转化为engine，静候更新x。X)  
 2024/10/31  Support Onnx and tensorRT(8.6.1) inference.
 # Requirements
