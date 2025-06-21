@@ -20,11 +20,22 @@ class FaceAnalysis:
                 engine = runtime.deserialize_cuda_engine(f.read())
             det_input = []
             det_output = []
-            for i in range(engine.num_bindings):
-                if engine.binding_is_input(i):
-                    det_input.append(engine.get_binding_name(i))
-                else:
-                    det_output.append(engine.get_binding_name(i))
+            if trt.__version__.split('.')[0] == '10':
+                # rt10.x
+                for name in engine:
+                    mode = engine.get_tensor_mode(name)
+                    if mode == trt.TensorIOMode.INPUT:
+                        det_input.append(name)
+                    elif mode == trt.TensorIOMode.OUTPUT:
+                        det_output.append(name)
+            else:
+                # rt8.x
+                for i in range(engine.num_bindings):
+                    if engine.binding_is_input(i):
+                        det_input.append(engine.get_binding_name(i))
+                    else:
+                        det_output.append(engine.get_binding_name(i))
+
             self.det_session = TRTModule(engine, input_names=det_input, output_names=det_output)
         else:
             print('no support now')
@@ -38,11 +49,22 @@ class FaceAnalysis:
                 engine = runtime.deserialize_cuda_engine(f.read())
             reg_input = []
             reg_output = []
-            for i in range(engine.num_bindings):
-                if engine.binding_is_input(i):
-                    reg_input.append(engine.get_binding_name(i))
-                else:
-                    reg_output.append(engine.get_binding_name(i))
+            if trt.__version__.split('.')[0] == '10':
+                # rt10.x
+                for name in engine:
+                    mode = engine.get_tensor_mode(name)
+                    if mode == trt.TensorIOMode.INPUT:
+                        reg_input.append(name)
+                    elif mode == trt.TensorIOMode.OUTPUT:
+                        reg_output.append(name)
+            else:
+                # rt8.x
+                for i in range(engine.num_bindings):
+                    if engine.binding_is_input(i):
+                        reg_input.append(engine.get_binding_name(i))
+                    else:
+                        reg_output.append(engine.get_binding_name(i))
+
             self.reg_session = TRTModule(engine, input_names=reg_input, output_names=reg_output)
         else:
             print('no support now')

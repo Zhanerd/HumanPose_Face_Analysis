@@ -18,6 +18,7 @@ class TextDetector(BaseTool):
         super().__init__(backend=backend, model_path=model_path, model_input_size=model_input_size, mean=mean, std=std,
                          gpu_id=gpu_id)
         self.det_box_type = "quad"
+        self.det_thre = 0.3
 
         ###初始化前后处理类
         self.preprocess_op = None
@@ -25,7 +26,9 @@ class TextDetector(BaseTool):
         self.preprocess()
         self.postprocess()
 
-    def __call__(self, img):
+
+    def __call__(self, img, det_thre):
+        self.det_thre = det_thre
         ori_im = img.copy()
         data = {"image": img}
         # 前处理
@@ -80,7 +83,7 @@ class TextDetector(BaseTool):
     def postprocess(self):
         postprocess_params = {}
         postprocess_params["name"] = "DBPostProcess"
-        postprocess_params["thresh"] = 0.3
+        postprocess_params["thresh"] = self.det_thre
         postprocess_params["box_thresh"] = 0.6
         postprocess_params["max_candidates"] = 1000
         postprocess_params["unclip_ratio"] = 1.5

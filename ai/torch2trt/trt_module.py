@@ -1,5 +1,6 @@
 import torch
 import tensorrt as trt
+from collections import defaultdict
 from .flattener import Flattener
 from .misc_utils import (
     torch_dtype_from_trt,
@@ -33,7 +34,17 @@ class TRTModule(torch.nn.Module):
         self.output_names = output_names
         self.input_flattener = input_flattener
         self.output_flattener = output_flattener
-    
+
+        self.inputShapes = self.engine.get_tensor_profile_shape(self.input_names[0], self._name_to_binding[self.input_names[0]])
+        self._trt_stream = torch.cuda.Stream()
+        self._out_cache = defaultdict(dict)
+
+    def _alloc_output(self, name, shape, dtype, device):
+        cache = self._out_cache[(dtype, device)]
+        if shape not in cache:
+            cache[shape] = torch.empty(shape, dtype=dtype, device=device)
+        return cache[shape]
+
     def _update_name_binindgs_maps(self):
         if trt_version() >= "10.0":
             self._update_name_binding_maps_trt_10()
@@ -96,7 +107,6 @@ class TRTModule(torch.nn.Module):
 
     def _forward_pre_10(self, *inputs):
         bindings = [None] * (len(self.input_names) + len(self.output_names))
-        
         if self.input_flattener is not None:
             inputs = self.input_flattener.flatten(inputs)
 
@@ -131,6 +141,36 @@ class TRTModule(torch.nn.Module):
         return outputs
 
     def _forward_post_10(self, *inputs):
+        # ---------- 绑定输入 ----------
+        for name, tensor in zip(self.input_names, inputs):
+            t = tensor if tensor.is_contiguous() else tensor.contiguous()  # ②
+            self.context.set_tensor_address(name, t.data_ptr())
+            self.context.set_input_shape(name, tuple(t.shape))
+
+        # ---------- 绑定 / 复用输出 ----------
+        outputs = []
+        for name in self.output_names:
+            dtype   = torch_dtype_from_trt(self.engine.get_tensor_dtype(name))
+            shape   = tuple(self.context.get_tensor_shape(name))
+            device  = torch_device_from_trt(self.engine.get_tensor_location(name))
+            out     = self._alloc_output(name, shape, dtype, device)       # ③
+            outputs.append(out)
+            self.context.set_tensor_address(name, out.data_ptr())
+
+        # ---------- 异步执行 ----------
+        with torch.cuda.stream(self._trt_stream):                          # ①
+            self.context.execute_async_v3(self._trt_stream.cuda_stream)
+
+        # 生命周期管理（同步到当前流）
+        for o in outputs:
+            o.record_stream(torch.cuda.current_stream())                  # ④
+
+        # ---------- 展平 / 解平 ----------
+        outputs = self.output_flattener.unflatten(outputs) \
+                  if self.output_flattener else (outputs[0] if len(outputs)==1 else tuple(outputs))
+        return outputs
+
+    def _forward_post_10_v1(self, *inputs):
         if self.input_flattener is not None:
             inputs = self.input_flattener.flatten(inputs)
 
@@ -162,11 +202,39 @@ class TRTModule(torch.nn.Module):
 
         return outputs
 
+    # ---------- helpers ----------
+    def _merge_chunks(self, outs):
+        if isinstance(outs[0], torch.Tensor):
+            return torch.cat(outs, dim=0)
+        if isinstance(outs[0], (tuple, list)):
+            trans = list(zip(*outs))
+            merged = [torch.cat(t, 0) for t in trans]
+            return type(outs[0])(merged)
+        raise TypeError("Unsupported output type")
+
     def forward(self, *inputs):
         if trt_version() < "10.0":
-            return self._forward_pre_10(*inputs)
+            flat_in = (self.input_flattener.flatten(inputs)
+                       if self.input_flattener else list(inputs))
+            total = flat_in[0].shape[0]     # total = 10  flat_in[0]=flat_in[0].expand(10, -1, -1, -1)
+            max_bs = self.inputShapes[2][0]
+            chunk_outs = []
+            for s in range(0, total, max_bs):
+                e = min(s + max_bs, total)
+                chunk = [x[s:e] for x in flat_in]
+                chunk_outs.append(self._forward_pre_10(*chunk))
+            return self._merge_chunks(chunk_outs)
         else:
-            return self._forward_post_10(*inputs)
+            flat_in = (self.input_flattener.flatten(inputs)
+                       if self.input_flattener else list(inputs))
+            total = flat_in[0].shape[0]     # total = 10  flat_in[0]=flat_in[0].expand(10, -1, -1, -1)
+            max_bs = self.inputShapes[2][0]
+            chunk_outs = []
+            for s in range(0, total, max_bs):
+                e = min(s + max_bs, total)
+                chunk = [x[s:e] for x in flat_in]
+                chunk_outs.append(self._forward_post_10(*chunk))
+            return self._merge_chunks(chunk_outs)
 
     def enable_profiling(self):
         if not self.context.profiler:

@@ -182,8 +182,8 @@ class TopDownEstimation:
             self.pose_model.release()
 
 if __name__ == '__main__':
-    pose = TopDownEstimation(det_path=r'C:\Users\84728\Desktop\yolov8_m11_e70.onnx', #C:\Users\84728\Desktop\yolov8_11_e51.onnx  D:\ai\ai\models\yolov8.onnx
-                             pose_path=r'D:\ai\ai\models\rtmpose_m_halpe262.engine',
+    pose = TopDownEstimation(det_path=r'D:\ai\ai\models\yolov8_m.engine', #C:\Users\84728\Desktop\yolov8_11_e51.onnx  D:\ai\ai\models\yolov8.onnx
+                             pose_path=r'D:\ai\ai\models\rtmpose_m_halpe26.engine',
                              track_path=r'D:\ai\ai\models\deepsort.engine')
     # pspnet = PSPNet(onnx_model=r'D:\ai\ai\PSPNet.onnx')
     # frame = cv2.imread(r'C:\Users\84728\Desktop\no_detection\StandingLongJump_1846809887086522369_1729843217_190.jpg')
@@ -206,10 +206,11 @@ if __name__ == '__main__':
     #     "4": [[1314, 850], [1766, 824], [2086, 880], [1632, 914]],
     #     "5": [[1766, 824], [2170, 796], [2520, 850], [2086, 880]]
     # }
-    cap = cv2.VideoCapture(r'C:\Users\84728\Desktop\802125.mp4')
+    cap = cv2.VideoCapture(r'C:\Users\84728\Desktop\145\短跑\192.168.20.145_01_20240801144158821.mp4')
     frame_idx = 0
     while cap.isOpened():
         success, frame = cap.read()
+        frame_idx += 1
         if not success:
             break
         t1 = time.time()
@@ -248,5 +249,8 @@ if __name__ == '__main__':
         # for i in l:
         #     frame = cv2.putText(frame, str(i[4]), (int(i[0]), int(i[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
         cv2.imshow("frame", frame)
-        cv2.waitKey(0)
+        cv2.waitKey(1)
+
+        if frame_idx % 5 == 0:
+            pose.tracker._reset()
         #print(len(results))

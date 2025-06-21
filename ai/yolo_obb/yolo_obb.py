@@ -4,7 +4,7 @@ import math
 import cv2
 import numpy as np
 
-from base import BaseTool
+from ai.yolo_obb.base import BaseTool
 
 
 def nms(boxes, scores, nms_threshold):
@@ -34,6 +34,8 @@ def nms(boxes, scores, nms_threshold):
 
 def xywh2xyxy(x):
     y = np.copy(x)
+    if len(y)==0:
+        return x
     y[:, 0] = x[:, 0] - x[:, 2] / 2
     y[:, 1] = x[:, 1] - x[:, 3] / 2
     y[:, 2] = x[:, 0] + x[:, 2] / 2
@@ -101,23 +103,26 @@ class YOLO_OBB(BaseTool):
         classes_scores = outputs[4:(4 + nc), ...]
         angles = outputs[-1, ...]
 
-        for i in range(outputs.shape[1]):
-            class_id = np.argmax(classes_scores[..., i])
-            score = classes_scores[class_id][i]
-            angle = angles[i]
-            if 0.5 * math.pi <= angle <= 0.75 * math.pi:
-                angle -= math.pi
-            if score > self.score_thr:
-                rotated_boxes.append(
-                    np.concatenate([outputs[:4, i], np.array([score, class_id, angle * 180 / math.pi])]))
-                scores.append(score)
-                class_ids.append(class_id)
+        class_ids = np.argmax(classes_scores, axis=0)
+        scores = classes_scores[class_ids, np.arange(classes_scores.shape[1])]
+        angles_adjusted = np.where((0.5 * np.pi <= angles) & (angles <= 0.75 * np.pi), angles - np.pi, angles)
 
+        # 筛选满足分数阈值的索引
+        valid_indices = scores > self.score_thr
+        scores = scores[valid_indices]
+        scores_reshape = np.reshape(scores,(1,-1))
+        class_ids = np.reshape(class_ids[valid_indices], (1, -1))
+        angles_adjusted = np.reshape(angles_adjusted[valid_indices] * 180 / np.pi,(1,-1))
+        boxes = outputs[:4, valid_indices]
+        # 提取有效的旋转框
+        rotated_boxes = np.concatenate([boxes, scores_reshape,
+                                        class_ids
+                                        ,angles_adjusted]).T
         rotated_boxes = np.array(rotated_boxes)
         boxes = xywh2xyxy(rotated_boxes)
-        scores = np.array(scores)
         indices = nms(boxes, scores, self.nms_thr)
         output = rotated_boxes[indices]
+
         return output
 
     def box_points(self, center, size, angle_deg):
@@ -163,39 +168,60 @@ class YOLO_OBB(BaseTool):
         return boxes
 
     def format_results(self, shape, outputs):
+        results = []
+        if outputs.shape[0] == 0:
+            return results
         box_data = self.scale_boxes(outputs, shape)
         boxes = box_data[..., :4]
         bboxes = xywh2xyxy(boxes)
         scores = box_data[..., 4]
         classes = box_data[..., 5].astype(np.int32)
         angles = box_data[..., 6]
-        results = []
-        for box, score, cl, angle, bbox in zip(boxes, scores, classes, angles, bboxes):
+        for i in range(outputs.shape[0]):
             result = {}
-            points = self.box_points((box[0], box[1]), (box[2], box[3]), angle)
+            points = self.box_points((boxes[i][0], boxes[i][1]), (boxes[i][2], boxes[i][3]), angles[i])
             points = np.int0(points)
-            result['points'] = points
-            result['score'] = score
-            result['class'] = cl
-            result['angle'] = angle
-            result['det'] = bbox
+            result['points'] = points.tolist()
+            result['score'] = scores[i]
+            result['class'] = classes[i]
+            result['angle'] = angles[i]
+            result['det'] = bboxes[i].tolist()
             results.append(result)
         return results
 
 if __name__ == '__main__':
-    model = YOLO_OBB(model_path=r"C:\Users\84728\Desktop\best.engine",
+    model = YOLO_OBB(model_path=r"C:\Users\84728\Desktop\data6.onnx",
                      model_input_size=(640, 640),
                      nms_thr=0.45,
-                     score_thr=0.7,
+                     score_thr=0.5,
                      gpu_id=0)
 
-    img = cv2.imread(r"C:\Users\84728\Desktop\2ball_cz_1.jpg")
-    results = model(img,0.4)
-    for result in results:
-        points = np.int0(result["points"])
-        cv2.polylines(img, [points], isClosed=True, color=(255, 0, 0), thickness=1)
-        cv2.putText(img, '{0} {1:.2f}'.format(result['class'], result['score']), (points[0][0], points[0][1]),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
-    cv2.imshow("img", img)
-    cv2.waitKey(0)
-    print(results)
+    # img = cv2.imread(r"C:\Users\84728\Desktop\2ball_cz_1.jpg")
+    # results = model(img,0.4)
+    # for result in results:
+    #     points = np.int0(result["points"])
+    #     cv2.polylines(img, [points], isClosed=True, color=(255, 0, 0), thickness=1)
+    #     cv2.putText(img, '{0} {1:.2f}'.format(result['class'], result['score']), (points[0][0], points[0][1]),
+    #                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+    # cv2.imshow("img", img)
+    # cv2.waitKey(0)
+    # print(results)
+    cap = cv2.VideoCapture(r"D:\篮球\172为1 198为2\2025-1-3\2025-1-2 16：40\8\8-2.mp4")
+    # cap = cv2.VideoCapture("rtsp://admin:hz123456@192.168.20.123:554/Streaming/Channels/1")
+    while cap.isOpened():
+        ret, img = cap.read()
+        if not ret:
+            break
+        if img is None:
+            continue
+        results = model(img,0.75)
+        for result in results:
+            points = np.int0(result["points"])
+            cv2.polylines(img, [points], isClosed=True, color=(255, 0, 0), thickness=1)
+            cv2.putText(img, '{0} {1:.2f}'.format(result['class'], result['angle']), (points[0][0], points[0][1]),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+            cv2.rectangle(img, (int(result['det'][0]), int(result['det'][1])),
+                                  (int(result['det'][2]), int(result['det'][3])), (0, 255, 0), 3)
+
+        cv2.imshow("img", img)
+        cv2.waitKey(0)

@@ -26,7 +26,6 @@ class PaddlePaddleOcr():
         ### 识别的相关参数
         self.save_crop_res = False
         self.crop_image_res_index = 0
-        self.drop_score = 0.5
         det_size = (640,640)
         # 加载文本检测模型
         self.det_model = None
@@ -72,10 +71,10 @@ class PaddlePaddleOcr():
         # print('test',test.shape)
         self.detect(test)
 
-    def detect(self, img, is_cls=False):
+    def detect(self, img, is_cls=False, det_thre=0.3, reg_thre=0.5, is_filter=False, min_area=0.01, min_slope=0.45):
         ori_im = img.copy()
         # 文字检测
-        dt_boxes = self.det_model(img)
+        dt_boxes = self.det_model(img,det_thre)
 
         if dt_boxes is None:
             return None, None
@@ -83,6 +82,11 @@ class PaddlePaddleOcr():
         img_crop_list = []
 
         dt_boxes = self.sorted_boxes(dt_boxes)
+
+        # 过滤倾斜的文本框和较小的文本框
+        if is_filter:
+            a = img.shape
+            dt_boxes, area, angle = self.filter_tag_det_res(dt_boxes, a[0] * a[1], min_area, min_slope)
 
         # 图片裁剪
         for bno in range(len(dt_boxes)):
@@ -105,7 +109,7 @@ class PaddlePaddleOcr():
         filter_boxes, filter_rec_res = [], []
         for box, rec_result in zip(dt_boxes, rec_res):
             text, score = rec_result
-            if score >= self.drop_score:
+            if score >= reg_thre:
                 filter_boxes.append(box)
                 filter_rec_res.append(rec_result)
 
@@ -156,15 +160,96 @@ class PaddlePaddleOcr():
         if self.cls_model is not None:
             self.cls_model.release()
 
+    def shoelace_area(self,points):
+        """ 计算四边形的面积，points 是按顺时针或逆时针排列的 (x, y) 坐标列表 """
+        points = points.astype(np.int32)
+        n = len(points)
+        area = 0
+        for i in range(n):
+            x1, y1 = points[i]
+            x2, y2 = points[(i + 1) % n]  # 取下一个点，最后一个点连接到第一个点
+            area += x1 * y2 - y1 * x2
+        return int(abs(area) / 2)
+
+    def slope(self, points):
+        """ 计算两点连线与X轴的斜率 """
+        x1, y1 = points[0]
+        x2, y2 = points[1]
+        if x2 - x1 == 0:  # 避免除以 0（垂直线的情况）
+            return float('inf')  # 无穷大表示垂直
+        return (y2 - y1) / (x2 - x1)
+
+    def filter_tag_det_res(self, dt_boxes, image_area, ratio=0.01, min_slope=0.45):
+        boxes = []
+        areas = []
+        angles = []
+        for box in dt_boxes:
+            area = self.shoelace_area(box)
+            angle = self.slope(box)
+            # print(f"面积: {area}, 总面积: {image_area}", angle)
+            if area < image_area * ratio:
+                continue
+            elif abs(angle) > min_slope:
+                continue
+            else:
+                boxes.append(box)
+                areas.append(area)
+                angles.append(angle)
+            # angle = self.diagonal_slope(box)
+
+            # rect = cv2.minAreaRect(box)
+            # center, (width, height), angle = rect
+            # if width < height:
+            #     angle = 90 + angle
+
+            # print(f"倾斜角度: {angle} 度")
+            # if angle > 80:
+            #     print("过滤掉倾斜角度大于80度的文本框")
+            #     continue
+            # else:
+            #     boxes.append(box)
+        return boxes,areas,angles
+
+
+def is_invalid_ocr(text):
+    # if len(text) != 3:
+    #     return True
+    if not text.isdigit():
+        return True
+    # if int(text) > 120:
+    #     return True
+    return False
+
 if __name__ == "__main__":
     # det = TextDetector(model_path=r"D:\OnnxOCR-main\onnxocr\models\ppocrv4\det\det.onnx", gpu_id=0,model_input_size=(640,640),backend="onnxruntime")
     # img_path = r'D:\OnnxOCR-main\onnxocr\test_images\1.jpg'
     # img = cv2.imread(img_path)
     # result = det(img)
     # print(result)
-    ocr = PaddlePaddleOcr(gpu_id=0, det_path="/home/hz/hz_lyb/paddlepaddle/OnnxOCR-main/onnxocr/models/ppocrv4/det/det.engine", reg_path="/home/hz/hz_lyb/paddlepaddle/OnnxOCR-main/onnxocr/models/ppocrv4/rec/reg.engine",
-                           cls_path="/home/hz/hz_lyb/paddlepaddle/OnnxOCR-main/onnxocr/models/ppocrv4/cls/cls.engine")
-    img_path = '/home/hz/hz_lyb/paddlepaddle/OnnxOCR-main/onnxocr/test_images/1.jpg'
-    img = cv2.imread(img_path)
-    result = ocr.detect(img,True)
-    print(result)
+    # ocr = PaddlePaddleOcr(gpu_id=0, det_path="/home/hz/hz_lyb/paddlepaddle/OnnxOCR-main/onnxocr/models/ppocrv4/det/det.engine", reg_path="/home/hz/hz_lyb/paddlepaddle/OnnxOCR-main/onnxocr/models/ppocrv4/rec/reg.engine",
+    #                        cls_path="/home/hz/hz_lyb/paddlepaddle/OnnxOCR-main/onnxocr/models/ppocrv4/cls/cls.engine")
+    ocr_det_model_path = r"D:\OnnxOCR-main\onnxocr\models\ppocrv4\det\det.onnx"
+    ocr_reco_model_path = r"D:\OnnxOCR-main\onnxocr\models\ppocrv4\rec\rec.onnx"
+    ocr_cls_model_path = r"D:\OnnxOCR-main\onnxocr\models\ppocrv4\cls\cls.onnx"
+    ocr = PaddlePaddleOcr(gpu_id=0, det_path=ocr_det_model_path,
+                          reg_path=ocr_reco_model_path,
+                          cls_path=ocr_cls_model_path)
+    # img_path = '/home/hz/hz_lyb/paddlepaddle/OnnxOCR-main/onnxocr/test_images/1.jpg'
+    # img = cv2.imread(img_path)
+    # result = ocr.detect(img,True)
+    # print(result)
+    cap = cv2.VideoCapture(r"D:\longrun_gushan\back_1_3.mp4")
+    while True:
+        ret, frame = cap.read()
+        if ret:
+            result = ocr.detect(frame,True)
+            # print(result)
+            for box, rec_result in zip(result[0], result[1]):
+                text, score = rec_result
+                if is_invalid_ocr(text):
+                    continue
+                print(text, score)
+                cv2.polylines(frame, [box[:8].astype(np.int32).reshape((-1, 1, 2))], True, (0, 255, 0), 2)
+                cv2.putText(frame, text, (int(box[0][0]), int(box[0][1])),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+        cv2.imshow('image', cv2.resize(frame, (640, 480)))
+        cv2.waitKey(0)

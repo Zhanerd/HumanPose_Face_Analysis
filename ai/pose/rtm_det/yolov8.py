@@ -4,10 +4,10 @@ import torch
 import cv2
 import numpy as np
 
-from ..base import BaseTool
-from .post_processing import multiclass_nmsv2
-class YOLOv8(BaseTool):
+from ai.pose.base import BaseTool
+from ai.pose.rtm_det.post_processing import multiclass_nmsv2
 
+class YOLOv8(BaseTool):
     def __init__(self,
                  model_path: str,
                  model_input_size: tuple = (640, 640),
@@ -167,3 +167,70 @@ def wh2xy(x):
     y[:, 2] = x[:, 0] + x[:, 2] / 2  # bottom right x
     y[:, 3] = x[:, 1] + x[:, 3] / 2  # bottom right y
     return y
+
+
+if __name__ == '__main__':
+    model = YOLOv8(model_path=r"D:\ai_library\ai\models\yolov8_m.onnx")
+    ball_model = YOLOv8(model_path=r"D:\ai_library\ai\models\b1.onnx", model_input_size=(320, 320))
+    video_path = r"C:\Users\84728\Desktop\802125.mp4"
+    video_path = r"D:\篮球\篮球\192.168.1.100球出界.mp4"
+    # video_path = r"E:\solidball_video\192.168.1.100_01_20250211173215749\7\7-1.mp4"
+    cap = cv2.VideoCapture(video_path)
+    frame_idx = 0
+    # cls = list(range(80))
+    t_size = 320
+    while cap.isOpened():
+        success, frame = cap.read()
+        # # 应用高斯模糊减少噪音
+        # image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        #
+        # blurred_image = cv2.GaussianBlur(image, (15, 15), 0)
+        #
+        # edges = cv2.Canny(blurred_image, threshold1=10, threshold2=100)
+        #
+        # # 使用霍夫变换检测圆形
+        # circles = cv2.HoughCircles(
+        #     edges,
+        #     cv2.HOUGH_GRADIENT, dp=1.2, minDist=30, param1=50, param2=30, minRadius=10, maxRadius=100
+        # )
+        #
+        # # 检测到圆形时
+        # if circles is not None:
+        #     circles = np.round(circles[0, :]).astype("int")
+        #     for (x, y, r) in circles:
+        #         # 绘制圆形
+        #         cv2.circle(image, (x, y), r, (0, 255, 0), 4)
+        #         # 绘制圆心
+        #         cv2.rectangle(image, (x - 5, y - 5), (x + 5, y + 5), (0, 128, 255), -1)
+        # frame = frame[:540, :910, :]
+        if not success:
+            continue
+        h, w, _ = frame.shape
+        detect_img = frame.copy()
+        ### 椅子56，人0，球32.
+        boxes,scores,cls_inds = model(frame, 0.05, [0,32])
+        # print(cls_inds)
+        for box,score,cls in zip(boxes,scores,cls_inds):
+            cv2.rectangle(frame, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 255, 0), 2)
+            cv2.putText(frame, str(cls)+str(round(score,2)), (int(box[0]), int(box[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255),2)
+            if cls==0:
+                cx = (box[0]+box[2])/2
+                cy = (box[1]+box[3])/2
+                # 根据中心点裁剪区域（限制在图像范围内）
+                src_y1 = max(int(cy - t_size / 2), 0)
+                src_y2 = min(int(cy + t_size / 2), h)
+                src_x1 = max(int(cx - t_size / 2), 0)
+                src_x2 = min(int(cx + t_size / 2), w)
+                detect_img = frame.copy()
+                imgs = frame - detect_img
+                # ball_boxes,_,_ = ball_model(detect_img, 0.3)
+                # for ball_box in ball_boxes:
+                #     print(len(ball_box),ball_box)
+                #     cv2.rectangle(detect_img, (int(ball_box[0]), int(ball_box[1])), (int(ball_box[2]), int(ball_box[3])), (0, 255, 0), 2)
+        # box.astype(int)
+        cv2.imshow('frame', frame)
+        cv2.waitKey(1)
+        cv2.imshow('edges', imgs)
+        cv2.waitKey(1)
+        # if cv2.waitKey(1) & 0xFF == ord('q'):
+        #     break

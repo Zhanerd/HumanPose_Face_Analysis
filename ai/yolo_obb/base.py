@@ -43,11 +43,21 @@ class BaseTool(metaclass=ABCMeta):
 
             input_names = []
             output_names = []
-            for i in range(engine.num_bindings):
-                if engine.binding_is_input(i):
-                    input_names.append(engine.get_binding_name(i))
-                else:
-                    output_names.append(engine.get_binding_name(i))
+            if trt.__version__.split('.')[0] == '10':
+                # rt10.x
+                for name in engine:
+                    mode = engine.get_tensor_mode(name)
+                    if mode == trt.TensorIOMode.INPUT:
+                        input_names.append(name)
+                    elif mode == trt.TensorIOMode.OUTPUT:
+                        output_names.append(name)
+            else:
+                # rt8.x
+                for i in range(engine.num_bindings):
+                    if engine.binding_is_input(i):
+                        input_names.append(engine.get_binding_name(i))
+                    else:
+                        output_names.append(engine.get_binding_name(i))
             self.session = TRTModule(engine,input_names=input_names, output_names=output_names)
 
     @abstractmethod

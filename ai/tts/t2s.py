@@ -59,11 +59,21 @@ class Text2Speech():
                 engine = runtime.deserialize_cuda_engine(f.read())
             input_names = []
             output_names = []
-            for i in range(engine.num_bindings):
-                if engine.binding_is_input(i):
-                    input_names.append(engine.get_binding_name(i))
-                else:
-                    output_names.append(engine.get_binding_name(i))
+            if trt.__version__.split('.')[0] == '10':
+                # rt10.x
+                for name in engine:
+                    mode = engine.get_tensor_mode(name)
+                    if mode == trt.TensorIOMode.INPUT:
+                        input_names.append(name)
+                    elif mode == trt.TensorIOMode.OUTPUT:
+                        output_names.append(name)
+            else:
+                # rt8.x
+                for i in range(engine.num_bindings):
+                    if engine.binding_is_input(i):
+                        input_names.append(engine.get_binding_name(i))
+                    else:
+                        output_names.append(engine.get_binding_name(i))
             self.am_decoder_sess = TRTModule(engine, input_names=input_names, output_names=output_names)
         else:
             self.decoder_backend = ''
@@ -83,11 +93,21 @@ class Text2Speech():
 
             input_names = []
             output_names = []
-            for i in range(engine.num_bindings):
-                if engine.binding_is_input(i):
-                    input_names.append(engine.get_binding_name(i))
-                else:
-                    output_names.append(engine.get_binding_name(i))
+            if trt.__version__.split('.')[0] == '10':
+                # rt10.x
+                for name in engine:
+                    mode = engine.get_tensor_mode(name)
+                    if mode == trt.TensorIOMode.INPUT:
+                        input_names.append(name)
+                    elif mode == trt.TensorIOMode.OUTPUT:
+                        output_names.append(name)
+            else:
+                # rt8.x
+                for i in range(engine.num_bindings):
+                    if engine.binding_is_input(i):
+                        input_names.append(engine.get_binding_name(i))
+                    else:
+                        output_names.append(engine.get_binding_name(i))
             self.am_postnet_sess = TRTModule(engine, input_names=input_names, output_names=output_names)
         else:
             self.postnet_backend = ''
@@ -108,17 +128,27 @@ class Text2Speech():
 
             input_names = []
             output_names = []
-            for i in range(engine.num_bindings):
-                if engine.binding_is_input(i):
-                    input_names.append(engine.get_binding_name(i))
-                else:
-                    output_names.append(engine.get_binding_name(i))
+            if trt.__version__.split('.')[0] == '10':
+                # rt10.x
+                for name in engine:
+                    mode = engine.get_tensor_mode(name)
+                    if mode == trt.TensorIOMode.INPUT:
+                        input_names.append(name)
+                    elif mode == trt.TensorIOMode.OUTPUT:
+                        output_names.append(name)
+            else:
+                # rt8.x
+                for i in range(engine.num_bindings):
+                    if engine.binding_is_input(i):
+                        input_names.append(engine.get_binding_name(i))
+                    else:
+                        output_names.append(engine.get_binding_name(i))
             self.voc_melgan_sess = TRTModule(engine, input_names=input_names, output_names=output_names)
         else:
             self.melgan_backend = ''
             print('melgan backend error')
         self.am_mu, self.am_std = np.load(am_stat_path)
-        self.inference('你的成绩是0分。')
+        self.inference('一号考生姚晨毫请注意，你的成绩是0分。')
 
     # 辅助函数 denorm, 训练过程中mel输出经过了norm，使用过程中需要进行denorm
     def denorm(self, data, mean, std):
@@ -208,10 +238,10 @@ if __name__ == '__main__':
     tts = Text2Speech(phones_dict,onnx_am_encoder, onnx_am_decoder, onnx_am_postnet, onnx_voc_melgan,am_stat_path)
     
     infer_time = time.time()
-    wav = tts.inference('你的成绩是0分。')
+    wav = tts.inference('一号考生姚晨毫请注意，你的成绩是0分。')
     print('infer time:', time.time() - infer_time)
     infer_time = time.time()
-    wav = tts.inference('你的成绩是0分。')
+    wav = tts.inference('一号考生姚晨毫请注意，你的成绩是0分。')
     print('infer time:', time.time() - infer_time)
     # tts.get_wav(wav)
 

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import math
 import time
 import torch
@@ -12,8 +14,10 @@ from ai.face_recognition.face_analysis import FaceAnalysis
 from ai.face_recognition.face_quality.face_quality import face_quality_assessment
 from ai.face_recognition.face_direction.face_direct import FaceDirection
 
+
 class FaceRecognition:
-    def __init__(self, det_path="", reg_path="", gpu_id=0, det_thresh=0.5, det_size=(640, 640), quality_path=None, direct_path=None):
+    def __init__(self, det_path="", reg_path="", gpu_id=0, det_thresh=0.5, det_size=(640, 640), quality_path=None,
+                 direct_path=None):
         """
         人脸识别工具类参数
         :param det_path: 人脸检测模型路径
@@ -65,12 +69,12 @@ class FaceRecognition:
         return self.is_init
 
     # 检测人脸
-    def detect(self, image, det_thresh=0.5, nms_thr=None, top_n=1, quality=False, quality_thre=0.5,std_thre=0.35):
-        w,h = image.shape[:2]
+    def detect(self, image, det_thresh=0.5, nms_thr=None, top_n=0, quality=False, quality_thre=0.7, std_thre=0.4):
+        w, h = image.shape[:2]
         if w < self.det_size[0] or h < self.det_size[1]:
-            padw = self.det_size[0] - w
-            padh = self.det_size[0] - h
-            img = cv2.copyMakeBorder(image, 0, max(padw,0), 0, max(padh,0), cv2.BORDER_CONSTANT, value=[0, 0, 0])
+            padw = max(self.det_size[0] - w, 0)
+            padh = max(self.det_size[0] - h, 0)
+            img = cv2.copyMakeBorder(image, 0, max(padw, 0), 0, max(padh, 0), cv2.BORDER_CONSTANT, value=[0, 0, 0])
             faces = self.model.batch_get(img, det_thresh, nms_thr)
         else:
             faces = self.model.batch_get(image, det_thresh, nms_thr)
@@ -94,11 +98,15 @@ class FaceRecognition:
             if self.quality_model and quality:
                 result["bbox"] = [0 if i < 0 else i for i in result["bbox"]]
                 face_img = image[result["bbox"][1]:result["bbox"][3], result["bbox"][0]:result["bbox"][2]]
+
                 if self.direct_path is not None:
                     pitch, yaw, roll = self.direct_path.inference(face_img)
                 else:
                     pitch, yaw, roll = self.face_direction(result, image.shape[:2])
                 scores = self.quality_model.inference(face_img)
+                score = round(np.mean(scores), 3)
+                std = np.std(scores)
+                result["scores"] = score
                 if not self.is_centered(result["bbox"], width, height):
                     result["error_code"] = 100  # 人脸未在中间
                     result["error_message"] = "人脸未在中间"
@@ -118,13 +126,11 @@ class FaceRecognition:
                     result["error_code"] = 303  # 翻滚角过大
                     result["error_message"] = "翻滚角过大 {}".format(abs(roll))
                 else:
-                    score = round(np.mean(scores), 3)
-                    std = np.std(scores)
-                    result["scores"] = score
+                    # print("face_scores", std, score)
                     if score < quality_thre or std > std_thre:  # 加入方差确保质量的稳定
-                        # print("face_scores", std, score)
                         result["error_code"] = 400  # 人脸置信度过低，可解释为有遮挡或者光线不良或者清晰度不佳
-                        result["error_message"] = "有遮挡或者光线不良或者清晰度不佳,  score : {}, std: {}".format(score, std)
+                        result["error_message"] = "有遮挡或者光线不良或者清晰度不佳,  score : {}, std: {}".format(score,
+                                                                                                                  std)
                     else:
                         result["error_code"] = 0
                         result["error_message"] = "success"
@@ -135,12 +141,13 @@ class FaceRecognition:
             results.append(result)
         return results
 
-    def detect_queue(self, image, det_thresh=0.5, nms_thr=None, top_n=1, quality=False, quality_thre=0.5,std_thre=0.35):
-        w,h = image.shape[:2]
+    def detect_queue(self, image, det_thresh=0.5, nms_thr=None, top_n=1, quality=False, quality_thre=0.5,
+                     std_thre=0.35):
+        w, h = image.shape[:2]
         if w < self.det_size[0] or h < self.det_size[1]:
             padw = self.det_size[0] - w
             padh = self.det_size[0] - h
-            img = cv2.copyMakeBorder(image, 0, max(padw,0), 0, max(padh,0), cv2.BORDER_CONSTANT, value=[0, 0, 0])
+            img = cv2.copyMakeBorder(image, 0, max(padw, 0), 0, max(padh, 0), cv2.BORDER_CONSTANT, value=[0, 0, 0])
             faces = self.model.batch_get_queue(img, det_thresh, nms_thr)
         else:
             faces = self.model.batch_get_queue(image, det_thresh, nms_thr)
@@ -194,7 +201,8 @@ class FaceRecognition:
                     if score < quality_thre or std > std_thre:  # 加入方差确保质量的稳定
                         # print("face_scores", std, score)
                         result["error_code"] = 400  # 人脸置信度过低，可解释为有遮挡或者光线不良或者清晰度不佳
-                        result["error_message"] = "有遮挡或者光线不良或者清晰度不佳,  score : {}, std: {}".format(score, std)
+                        result["error_message"] = "有遮挡或者光线不良或者清晰度不佳,  score : {}, std: {}".format(score,
+                                                                                                                  std)
                     else:
                         result["error_code"] = 0
                         result["error_message"] = "success"
@@ -218,6 +226,7 @@ class FaceRecognition:
         # 使用 np.argmax 找出每一行的最大值位置
         max_indices = np.argmax(cos_similarity, axis=1)
         # 使用最大值的位置索引从原数组中提取对应的最大值
+
         max_values = cos_similarity[np.arange(cos_similarity.shape[0]), max_indices]
 
         for i in range(0, max_values.shape[0], 1):
@@ -235,7 +244,48 @@ class FaceRecognition:
             match_infos.append(match_info)
         return match_infos
 
-    def match_feature_tensor_optimized(self, group_id, embedding, thre=0.75):
+    def match_multi_feature(self, in_emb, db_emb, labels,
+                            thre=0.75, top_k=-1):
+        """
+            返回满足阈值的匹配信息，并按相似度从高到低排序。
+            - 若 top_k>0，仅保留相似度最高的 K 条。
+            """
+        # --- 参数检查 -----------------------------------------------------------
+        if not labels or db_emb.size == 0 or in_emb.size == 0:
+            return []
+
+        # --- 计算 Cosine 相似度并归一到 [0,1] -----------------------------------
+        #   假设输入已经 L2 归一化，否则请先 `in_emb /= np.linalg.norm(in_emb, axis=1, keepdims=True)` 处理
+        sim = in_emb @ db_emb.T  # [B,N]
+        sim = (sim + 1.0) * 0.5  # 映射到 [0,1]
+
+        # --- 过滤阈值 -----------------------------------------------------------
+        rows, cols = np.where(sim >= thre)
+        if rows.size == 0:  # 没有符合阈值的
+            return []
+
+        sims = sim[rows, cols]  # 1-D 相似度数组
+        if top_k > 0 and sims.size > top_k:
+            # argpartition 只做 K 次比较，O(N)
+            keep_idx = np.argpartition(-sims, top_k - 1)[:top_k]
+            rows, cols, sims = rows[keep_idx], cols[keep_idx], sims[keep_idx]
+
+        # --- 按相似度降序 -------------------------------------------------------
+        order = np.argsort(-sims)  # 完全排序只在 K 条数据上做，开销极小
+        rows, cols, sims = rows[order], cols[order], sims[order]
+
+        labels_arr = np.asarray(labels)  # 切一次列表 → ndarray 便于索引
+        match_infos = [
+            {
+                "person_id": labels_arr[c],
+                "similarity": round(float(s), 3)
+            }
+            for c, s in zip(cols, sims)
+        ]
+        return match_infos
+
+    # def match_feature_tensor_optimized(self, faceid_list, label_list, embedding, group_embedding, thre=0.75):
+    def match_feature_tensor_optimized(self, in_embedding, group_embedding, label_list, thre=0.75):
         # if not label_list or group_embedding.size == 0 or in_embedding.size == 0:
         #     return []
         # # 将张量移动到 GPU 上，使用 float32，并确保内存连续
@@ -243,19 +293,22 @@ class FaceRecognition:
         # in_embedding = torch.from_numpy(in_embedding).to('cuda').float().contiguous()
         # group_embedding = torch.from_numpy(group_embedding).to('cuda').float().contiguous()
         match_infos = []
-        dict_features = self.query_group_features(group_id)
-        if dict_features is None:
-            return match_infos
-        group_embedding = dict_features["features"]
+        # ### 获取特征， query_group_features暂未定义，根据需求决定
+        # dict_features = self.query_group_features(group_id)
+        # if dict_features is None:
+        #     return match_infos
+        # group_embedding = dict_features["features"]
+        # label_list = dict_features["pids"]
+        # faceid_list = dict_features["fids"]
+
         if type(group_embedding) == np.ndarray:
             group_embedding = torch.from_numpy(group_embedding).to('cuda').float().contiguous()
-        if type(embedding) == np.ndarray:
-            embedding = torch.from_numpy(embedding).to('cuda').float().contiguous()
-        label_list = dict_features["pids"]
-        faceid_list = dict_features["fids"]
+        if type(in_embedding) == np.ndarray:
+            in_embedding = torch.from_numpy(in_embedding).to('cuda').float().contiguous()
+
         with torch.no_grad():
             # 计算余弦相似度
-            cos_similarity = torch.matmul(embedding, group_embedding.T)
+            cos_similarity = (in_embedding, group_embedding.T)
             # 找出每一行的最大值及其索引
             max_values, max_indices = torch.max(cos_similarity, dim=1)
 
@@ -267,15 +320,14 @@ class FaceRecognition:
                 index = max_indices[i]
                 if similarity < thre:
                     match_info["person_id"] = ""
-                    match_info["face_id"] = ""
+                    # match_info["face_id"] = ""
                     # match_info["similarity"] = 0
                 else:
                     match_info["person_id"] = label_list[index]
-                    match_info["face_id"] = faceid_list[index]
+                    # match_info["face_id"] = faceid_list[index]
                 match_info["similarity"] = round(similarity.cpu().tolist(), 3)
                 match_infos.append(match_info)
         return match_infos
-
 
     def is_centered(self, bbox, img_width, img_height, threshold_percentage=0.15):
         x1, y1, x2, y2 = bbox
@@ -294,12 +346,11 @@ class FaceRecognition:
         else:
             return False
 
-    def bbox_ratio(self, bbox, img_width, img_height, threshold=0.05):
+    def bbox_ratio(self, bbox, img_width, img_height, threshold=0.1):
         x1, y1, x2, y2 = bbox
         bbox_area = (x2 - x1) * (y2 - y1)
         img_area = img_width * img_height
         ratio = bbox_area / img_area
-
         # 判断人脸框的大小
         if ratio >= threshold:
             return True
@@ -379,10 +430,71 @@ class FaceRecognition:
 
 
 if __name__ == '__main__':
-    face_recognitio = FaceRecognition(det_path=r'D:\ai\ai\models\face_det_10g.engine',
-                                      reg_path=r'D:\ai\ai\models\face_w600k_r50.engine',
-                                      quality_path = r"D:\ai\ai\models\face_quality_assessment.onnx",
+    face_recognitio = FaceRecognition(det_path=r'D:\ai\ai\5060_models\face_det_10g.engine',
+                                      reg_path=r'D:\ai\ai\5060_models\face_w600k_r50.engine',
+                                      quality_path=r'D:\ai\ai\5060_models\face_quality_assessment.onnx',
                                       gpu_id=0)
+    file_path = r'C:\Users\84728\Desktop\test_face'
+    # url = 'https://tse1-mm.cn.bing.net/th/id/OIP-C.YgnTN8sMbvwBF7hEj5vOowHaLH?rs=1&pid=ImgDetMain'
+    # cap = cv2.VideoCapture(url)
+    # _, image = cap.read()
+    files = os.listdir(file_path)
+    for file in files:
+        print(file)
+        # file = r'C:\Users\84728\Desktop\test_face\524.png'
+        if file.endswith('.jpg') or file.endswith('.png'):
+            img = cv2.imread(os.path.join(file_path, file))
+
+            print(img.shape)
+            t1 = time.time()
+            result = face_recognitio.detect(img,quality=True)
+            print(time.time()-t1)
+
+    db = np.load(r'D:\ai_library\36m_face.npy', allow_pickle=True).item()
+    pid = list(db.keys())
+    P = list()
+    ge = list(db.values())
+    ge_np = np.array(ge, dtype=float)
+    ge_np = ge_np.reshape(-1, 512)
+    log = None
+    last_log = None
+    videopath = r"D:\m36_longrun\228.mp4"
+    cap = cv2.VideoCapture(videopath)
+    frame_idx = 0
+    start_t = 11375
+    end_t = 500000
+    while cap.isOpened():
+        ret, frame = cap.read()
+        frame_idx += 1
+        # if frame_idx < start_t + 5000:
+        #     continue
+        # if frame_idx > end_t:
+        #     break
+        results = face_recognitio.detect(frame, det_thresh=0.4)
+        for result in results:
+            match_info = face_recognitio.match_multi_feature(result['embedding'], ge_np, pid,
+                                                       thre=0.4,top_k=3)
+            if len(match_info) > 0:
+                name = match_info[0]['person_id']
+            else:
+                name = ''
+            frame = cv2.rectangle(frame, (result['bbox'][0], result['bbox'][1]), (result['bbox'][2], result['bbox'][3]),
+                                  (0, 0, 255), 2)
+            if name != '':
+                frame = cv2.putText(frame, str(name), (result['bbox'][0], result['bbox'][1]), cv2.FONT_HERSHEY_SIMPLEX,
+                                    1,
+                                    (0, 0, 255), 2)
+                log = (match_info, (frame_idx - start_t) / 25)
+                if log is not None:
+                    if last_log is None:
+                        last_log = log
+                        continue
+                    if last_log[0][0]['person_id'] != log[0][0]['person_id']:
+                        print(log)
+                    last_log = log
+        cv2.imshow('a', cv2.resize(frame, (1440, 720)))
+        cv2.waitKey(1)
+
     # #img = cv2.imdecode(np.fromfile('http://192.168.7.170:8077/file/20240829/814a4790ead94cfaae34b5f5029f6d4c.jpg', dtype=np.uint8), -1)
     # img = cv2.imread(r'D:\ai\ai\models\bcaa68ec0c3146f4b5b32c606ab0909a.png')
     # t1 = time.time()
@@ -404,28 +516,30 @@ if __name__ == '__main__':
     #     cv2.waitKey(1)
     # print('queue',time.time()-a)
 
-    frame = cv2.imread(r"C:\Users\84728\Desktop\test\t1.jpeg")
-    def normal_detect(frame):
-        count = 0
-        a = time.time()
-        while count<200:
-            # ret, frame = cap.read()
-            results = face_recognitio.detect(frame, det_thresh=0.4, nms_thr=0.5, quality=True)
-            count += 1
-
-        print('normal',time.time()-a)
-    def queue_detect(frame):
-        a = time.time()
-        count = 0
-        while count<200:
-            results = face_recognitio.detect_queue(frame, det_thresh=0.4, nms_thr=0.5, quality=True)
-            count += 1
-        face_recognitio.model.faces_queue = []
-        print('queue',time.time()-a)
-
-    for i in range(10):
-        normal_detect(frame)
-        queue_detect(frame)
+    # frame = cv2.imread(r"C:\Users\84728\Desktop\test\t1.jpeg")
+    # frame = cv2.imread(r"C:\Users\84728\Desktop\406.jpg")
+    # frame = cv2.imread(r'C:\Users\84728\Desktop\face\apps\256.png')
+    # def normal_detect(frame):
+    #     count = 0
+    #     a = time.time()
+    #     while count<200:
+    #         # ret, frame = cap.read()
+    #         results = face_recognitio.detect(frame, det_thresh=0.4, nms_thr=0.5, quality=True)
+    #         count += 1
+    #
+    #     print('normal',time.time()-a)
+    # def queue_detect(frame):
+    #     a = time.time()
+    #     count = 0
+    #     while count<200:
+    #         results = face_recognitio.detect_queue(frame, det_thresh=0.4, nms_thr=0.5, quality=True)
+    #         count += 1
+    #     face_recognitio.model.faces_queue = []
+    #     print('queue',time.time()-a)
+    #
+    # for i in range(10):
+    #     normal_detect(frame)
+    #     queue_detect(frame)
     # face_quality = face_quality_assessment('ai/models/face-quality-assessment.onnx', gpu_id=-1)
     # from utils.FrameCapture import FrameCapture
     # cap = FrameCapture(frame_source="rtsp://admin:hz123456@192.168.20.102:554/Streaming/Channels/1")

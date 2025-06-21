@@ -2,7 +2,8 @@
 This project contain face,huamn-pose detect(yolo,rtmdet,etc) and recognition(arcface,rtmpose,etc). 
 Try to provide inference on onnx,tensorRT,rknn...  
 # Update Log
-2025/04/03  U can download onnx models by google dirver(https://drive.google.com/drive/folders/1DfTw0aEpuEyXpo7XJXIvCzDTuZ-wNOy8?usp=drive_link). See details in ai/models/readme.  
+2025/06/21  Now, we support tensorRT(10.x) for RTX 50 Series(BLACKWELL).  
+2025/04/03  You can download onnx models by google dirver(https://drive.google.com/drive/folders/1DfTw0aEpuEyXpo7XJXIvCzDTuZ-wNOy8?usp=drive_link). See details in ai/models/readme.  
 2025/01/23  Add some new feature(Ocr,TTS,YOLO_obb). (Warning, this tts model is only support chinese! | TTS目前仅仅支持中文，且encoder还不能转化为engine，静候更新x。X)  
 2024/10/31  Support Onnx and tensorRT(8.6.1) inference.
 # Requirements
@@ -10,6 +11,9 @@ Try to provide inference on onnx,tensorRT,rknn...
     torch==2.1.1
     onnxruntime-gpu==1.18.0
     tensorrt==8.6.1
+
+If you are using RTX 50 Series, you are better to install tensorrt 10.8+, python 3.10+, cuda12.x and torch 2.7+.
+
 In this project, u dont need to install insightface or ultralyitcs or paddlepaddle or mmpose!
 # USAGE
 There will briefly introduce how to use it.

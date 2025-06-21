@@ -1,6 +1,8 @@
 import numpy as np
 import os.path as osp
 import cv2
+import onnxruntime
+import tensorrt as trt
 import torch
 # import sys
 # sys.path.append('/home/hz/server/ai_sport_server')
@@ -11,10 +13,8 @@ class RetinaFace:
         self.model_file = model_file
         self.session = session
         if 'onnx' in self.model_file:
-            import onnxruntime
             self.backend = 'onnxruntime'
         elif 'engine' in self.model_file:
-            import tensorrt
             self.backend = 'tensorrt'
         else:
             print('unknown model type')
@@ -73,8 +73,6 @@ class RetinaFace:
         # print(self.output_names)
         # assert len(outputs)==10 or len(outputs)==15
 
-
-
     def prepare(self, ctx_id, **kwargs):
         if ctx_id < 0 and self.backend == 'onnx':
             self.session.set_providers(['CPUExecutionProvider'])
@@ -116,10 +114,11 @@ class RetinaFace:
             with torch.no_grad():
                 outputs = self.session(blob)
             net_outs = [output.cpu().numpy() for output in outputs]
-            #### rt推理之后特征顺序改变了，这里是对齐onnx以便后处理
-            net_outs[1], net_outs[3] = net_outs[3], net_outs[1]
-            net_outs[2], net_outs[6] = net_outs[6], net_outs[2]
-            net_outs[5], net_outs[7] = net_outs[7], net_outs[5]
+            #### rt8.x推理之后特征顺序改变了，这里是对齐onnx以便后处理, rt10.x就不需要改动
+            if trt.__version__.split('.')[0] == '8':
+                net_outs[1], net_outs[3] = net_outs[3], net_outs[1]
+                net_outs[2], net_outs[6] = net_outs[6], net_outs[2]
+                net_outs[5], net_outs[7] = net_outs[7], net_outs[5]
         else:
             print('unknown backend')
         input_height = blob.shape[2]

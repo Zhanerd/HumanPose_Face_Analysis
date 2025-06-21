@@ -123,7 +123,7 @@ import math
 
 
 if __name__ == "__main__":
-    image = cv2.imread(r"C:\Users\84728\Desktop\2ball_cz_1.jpg", -1)
+    image = cv2.imread(r"C:\Users\84728\Desktop\animal.png")
     input = letterbox(image, input_shape)
     input = input[:, :, ::-1].transpose(2, 0, 1).astype(dtype=np.float32)  # BGR2RGB和HWC2CHW
     input = input / 255.0
