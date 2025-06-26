@@ -1,0 +1,49 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <value>
+          <list size="26">
+            <item index="0" class="java.lang.String" itemvalue="onnxruntime" />
+            <item index="1" class="java.lang.String" itemvalue="yolov5" />
+            <item index="2" class="java.lang.String" itemvalue="tensorflow" />
+            <item index="3" class="java.lang.String" itemvalue="filterpy" />
+            <item index="4" class="java.lang.String" itemvalue="mediapipe" />
+            <item index="5" class="java.lang.String" itemvalue="opencv-python" />
+            <item index="6" class="java.lang.String" itemvalue="onnx" />
+            <item index="7" class="java.lang.String" itemvalue="simpleaudio" />
+            <item index="8" class="java.lang.String" itemvalue="psutil" />
+            <item index="9" class="java.lang.String" itemvalue="tgt" />
+            <item index="10" class="java.lang.String" itemvalue="scipy" />
+            <item index="11" class="java.lang.String" itemvalue="transformers" />
+            <item index="12" class="java.lang.String" itemvalue="PyYAML" />
+            <item index="13" class="java.lang.String" itemvalue="scikit_learn" />
+            <item index="14" class="java.lang.String" itemvalue="torch" />
+            <item index="15" class="java.lang.String" itemvalue="numpy" />
+            <item index="16" class="java.lang.String" itemvalue="requests" />
+            <item index="17" class="java.lang.String" itemvalue="tqdm" />
+            <item index="18" class="java.lang.String" itemvalue="Unidecode" />
+            <item index="19" class="java.lang.String" itemvalue="matplotlib" />
+            <item index="20" class="java.lang.String" itemvalue="inflect" />
+            <item index="21" class="java.lang.String" itemvalue="pypinyin_dict" />
+            <item index="22" class="java.lang.String" itemvalue="gevent" />
+            <item index="23" class="java.lang.String" itemvalue="pyworld" />
+            <item index="24" class="java.lang.String" itemvalue="pypinyin" />
+            <item index="25" class="java.lang.String" itemvalue="Flask" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyPep8NamingInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredErrors">
+        <list>
+          <option value="N802" />
+          <option value="N801" />
+          <option value="N806" />
+          <option value="N803" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>

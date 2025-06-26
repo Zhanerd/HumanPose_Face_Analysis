@@ -2,6 +2,7 @@
 This project contain face,huamn-pose detect(yolo,rtmdet,etc) and recognition(arcface,rtmpose,etc). 
 Try to provide inference on onnx,tensorRT,rknn...  
 # Update Log
+2025/06/26  FaceRecognition(insightface) can use bmodel(sophon算能) to inference.  
 2025/06/21  Now, we support tensorRT(10.x) for RTX 50 Series(BLACKWELL).  
 2025/04/03  You can download onnx models by google dirver(https://drive.google.com/drive/folders/1DfTw0aEpuEyXpo7XJXIvCzDTuZ-wNOy8?usp=drive_link). See details in ai/models/readme.  
 2025/01/23  Add some new feature(Ocr,TTS,YOLO_obb). (Warning, this tts model is only support chinese! | TTS目前仅仅支持中文，且encoder还不能转化为engine，静候更新x。X)  
