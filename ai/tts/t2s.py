@@ -2,6 +2,7 @@ import os.path
 import time
 import threading
 import sys
+
 sys.path.append('../../')
 from ai.tts.frontend.zh_frontend import Frontend
 import onnxruntime as ort
@@ -9,6 +10,7 @@ import numpy as np
 import simpleaudio as sa
 import soundfile as sf
 import torch
+
 
 class Text2Speech():
     def __init__(self,
@@ -113,7 +115,6 @@ class Text2Speech():
             self.postnet_backend = ''
             print('postnet backend error')
 
-
         ### 创建voc_melgan_sess
         if 'onnx' in os.path.basename(melgan_path):
             self.melgan_backend = 'onnxruntime'
@@ -148,7 +149,10 @@ class Text2Speech():
             self.melgan_backend = ''
             print('melgan backend error')
         self.am_mu, self.am_std = np.load(am_stat_path)
-        self.inference('一号考生姚晨毫请注意，你的成绩是0分。')
+        self.inference('你好啊世界')
+
+        self._play_obj = None
+        self._lock = threading.Lock()
 
     # 辅助函数 denorm, 训练过程中mel输出经过了norm，使用过程中需要进行denorm
     def denorm(self, data, mean, std):
@@ -158,7 +162,7 @@ class Text2Speech():
 
     # 推理阶段封装
     # 端到端合成：一次性把句子全部合成完毕
-    def inference(self,text):
+    def inference(self, text):
         if text == "":
             print("text is empty")
             return None
@@ -167,7 +171,7 @@ class Text2Speech():
 
         orig_hs = self.am_encoder_infer_sess.run(None, input_feed={'text': phone_ids[0].numpy()})
 
-        print('encoder',time.time()-t1)
+        print('encoder', time.time() - t1)
 
         hs = orig_hs[0]
         t1 = time.time()
@@ -178,7 +182,7 @@ class Text2Speech():
             with torch.no_grad():
                 outputs = self.am_decoder_sess(input)
             am_decoder_output = [outputs.cpu().numpy()]
-        print('decoder',time.time()-t1)
+        print('decoder', time.time() - t1)
         t1 = time.time()
         xs = np.transpose(am_decoder_output[0], (0, 2, 1))
         if self.postnet_backend == 'onnxruntime':
@@ -191,7 +195,7 @@ class Text2Speech():
                 outputs = self.am_postnet_sess(input)
             am_postnet_output = [outputs.cpu().numpy()]
 
-        print('postnet',time.time()-t1)
+        print('postnet', time.time() - t1)
 
         am_output_data = am_decoder_output + np.transpose(am_postnet_output[0], (0, 2, 1))
         normalized_mel = am_output_data[0][0]
@@ -204,25 +208,40 @@ class Text2Speech():
             with torch.no_grad():
                 outputs = self.voc_melgan_sess(input)
             wav = outputs.cpu().numpy()
-        print('voc_melgan_sess',time.time()-t1)
+        print('voc_melgan_sess', time.time() - t1)
 
         return wav
 
-    def get_wav(self,wav,path="demo.wav"):
-        sf.write(path, wav, samplerate=24000)
+    def get_wav(self, wav, path="demo.wav", samplerate=24000, silence_sec=0.5):
+        if wav.ndim == 1:
+            silence = np.zeros(int(samplerate * silence_sec), dtype=wav.dtype)
+        elif wav.ndim == 2:
+            silence = np.zeros((int(samplerate * silence_sec), wav.shape[1]), dtype=wav.dtype)
+        else:
+            raise ValueError("Unsupported wav dimensions")
+        wav_final = np.concatenate([wav, silence], axis=0)
+        sf.write(path, wav_final, samplerate=24000)
 
     def threadingSpeak(self, wav, delayTime=0):
-        ### 输入要为音频格式
         threading.Timer(delayTime, self.speakText, args=(wav,)).start()
 
     def speakText(self, wav):
         try:
             audio_data_int16 = (wav * 32767).astype(np.int16)
             play_obj = sa.play_buffer(audio_data_int16, num_channels=1, bytes_per_sample=2, sample_rate=24000)
+            with self._lock:
+                self._play_obj = play_obj
             play_obj.wait_done()
+            with self._lock:
+                self._play_obj = None
         except Exception as e:
-            # 记录异常信息
             print(f"An error occurred: {e}")
+
+    def stop(self):
+        with self._lock:
+            if self._play_obj:
+                self._play_obj.stop()
+                self._play_obj = None
 
 
 if __name__ == '__main__':
@@ -230,19 +249,21 @@ if __name__ == '__main__':
     # 模型路径
     onnx_am_encoder = r"D:\ai_library\ai\tts\fastspeech2_models\fastspeech2_csmsc_am_encoder_infer.onnx"
     onnx_am_decoder = r"D:\ai_library\ai\tts\fastspeech2_models\fastspeech2_csmsc_am_decoder.onnx"
-    onnx_am_postnet = r"D:\ai_library\ai\tts\fastspeech2_models\fastspeech2_csmsc_am_postnet.engine"
-    onnx_voc_melgan = r"D:\ai_library\ai\tts\melgan_models\mb_melgan_csmsc.engine"
+    onnx_am_postnet = r"D:\ai_library\ai\tts\fastspeech2_models\fastspeech2_csmsc_am_postnet.onnx"
+    onnx_voc_melgan = r"D:\ai_library\ai\tts\melgan_models\mb_melgan_csmsc.onnx"
 
     am_stat_path = r"D:\ai_library\ai\tts\fastspeech2_models\speech_stats.npy"
 
-    tts = Text2Speech(phones_dict,onnx_am_encoder, onnx_am_decoder, onnx_am_postnet, onnx_voc_melgan,am_stat_path)
-    
+    tts = Text2Speech(phones_dict, onnx_am_encoder, onnx_am_decoder, onnx_am_postnet, onnx_voc_melgan, am_stat_path)
+
+    # infer_time = time.time()
+    # wav = tts.inference('请投掷!')
+    # print('infer time:', time.time() - infer_time)
     infer_time = time.time()
-    wav = tts.inference('一号考生姚晨毫请注意，你的成绩是0分。')
-    print('infer time:', time.time() - infer_time)
-    infer_time = time.time()
-    wav = tts.inference('一号考生姚晨毫请注意，你的成绩是0分。')
+    wav = tts.inference('你的成绩是0分。')
     print('infer time:', time.time() - infer_time)
     # tts.get_wav(wav)
 
     tts.threadingSpeak(wav)
+    time.sleep(1)
+    tts.stop()
