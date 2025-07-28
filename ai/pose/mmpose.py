@@ -180,6 +180,9 @@ class TopDownEstimation:
             self.det_model.release()
         if self.pose_model is not None:
             self.pose_model.release()
+        if self.tracker is not None:
+            self.tracker.extractor.release()
+
 
 if __name__ == '__main__':
     pose = TopDownEstimation(det_path=r'D:\ai\ai\models\yolov8_m.engine', #C:\Users\84728\Desktop\yolov8_11_e51.onnx  D:\ai\ai\models\yolov8.onnx

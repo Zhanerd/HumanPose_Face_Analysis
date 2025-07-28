@@ -80,6 +80,17 @@ class Extractor:
             net_out = None
         return net_out
 
+    def release(self):
+        if self.backend == 'onnxruntime':
+            del self.model
+        elif self.backend == 'tensorrt':
+            del self.model.engine
+            del self.model.context
+            import gc
+            gc.collect()
+        else:
+            pass
+        self.model = None
     # def __call__(self, im_crops):
     #     embs = []
     #     for im in im_crops:
