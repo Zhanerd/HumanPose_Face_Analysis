@@ -2,7 +2,6 @@ import os.path
 import time
 import threading
 import sys
-
 sys.path.append('../../')
 from ai.tts.frontend.zh_frontend import Frontend
 import onnxruntime as ort
@@ -10,7 +9,6 @@ import numpy as np
 import simpleaudio as sa
 import soundfile as sf
 import torch
-
 
 class Text2Speech():
     def __init__(self,
@@ -115,6 +113,7 @@ class Text2Speech():
             self.postnet_backend = ''
             print('postnet backend error')
 
+
         ### 创建voc_melgan_sess
         if 'onnx' in os.path.basename(melgan_path):
             self.melgan_backend = 'onnxruntime'
@@ -154,6 +153,7 @@ class Text2Speech():
         self._play_obj = None
         self._lock = threading.Lock()
 
+
     # 辅助函数 denorm, 训练过程中mel输出经过了norm，使用过程中需要进行denorm
     def denorm(self, data, mean, std):
         """stream am model need to denorm
@@ -162,7 +162,7 @@ class Text2Speech():
 
     # 推理阶段封装
     # 端到端合成：一次性把句子全部合成完毕
-    def inference(self, text):
+    def inference(self,text):
         if text == "":
             print("text is empty")
             return None
@@ -171,7 +171,7 @@ class Text2Speech():
 
         orig_hs = self.am_encoder_infer_sess.run(None, input_feed={'text': phone_ids[0].numpy()})
 
-        print('encoder', time.time() - t1)
+        print('encoder',time.time()-t1)
 
         hs = orig_hs[0]
         t1 = time.time()
@@ -182,7 +182,7 @@ class Text2Speech():
             with torch.no_grad():
                 outputs = self.am_decoder_sess(input)
             am_decoder_output = [outputs.cpu().numpy()]
-        print('decoder', time.time() - t1)
+        print('decoder',time.time()-t1)
         t1 = time.time()
         xs = np.transpose(am_decoder_output[0], (0, 2, 1))
         if self.postnet_backend == 'onnxruntime':
@@ -195,7 +195,7 @@ class Text2Speech():
                 outputs = self.am_postnet_sess(input)
             am_postnet_output = [outputs.cpu().numpy()]
 
-        print('postnet', time.time() - t1)
+        print('postnet',time.time()-t1)
 
         am_output_data = am_decoder_output + np.transpose(am_postnet_output[0], (0, 2, 1))
         normalized_mel = am_output_data[0][0]
@@ -208,7 +208,7 @@ class Text2Speech():
             with torch.no_grad():
                 outputs = self.voc_melgan_sess(input)
             wav = outputs.cpu().numpy()
-        print('voc_melgan_sess', time.time() - t1)
+        print('voc_melgan_sess',time.time()-t1)
 
         return wav
 
@@ -254,15 +254,15 @@ if __name__ == '__main__':
 
     am_stat_path = r"D:\ai_library\ai\tts\fastspeech2_models\speech_stats.npy"
 
-    tts = Text2Speech(phones_dict, onnx_am_encoder, onnx_am_decoder, onnx_am_postnet, onnx_voc_melgan, am_stat_path)
-
-    # infer_time = time.time()
-    # wav = tts.inference('请投掷!')
-    # print('infer time:', time.time() - infer_time)
+    tts = Text2Speech(phones_dict,onnx_am_encoder, onnx_am_decoder, onnx_am_postnet, onnx_voc_melgan,am_stat_path)
+    
     infer_time = time.time()
-    wav = tts.inference('你的成绩是0分。')
+    wav = tts.inference('叮!')
     print('infer time:', time.time() - infer_time)
-    # tts.get_wav(wav)
+    # infer_time = time.time()
+    # wav = tts.inference('一号考生姚晨毫请注意，你的成绩是0分。')
+    # print('infer time:', time.time() - infer_time)
+    tts.get_wav(wav)
 
     tts.threadingSpeak(wav)
     time.sleep(1)

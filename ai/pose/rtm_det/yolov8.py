@@ -7,6 +7,7 @@ import numpy as np
 from ai.pose.base import BaseTool
 from ai.pose.rtm_det.post_processing import multiclass_nmsv2
 
+
 class YOLOv8(BaseTool):
     def __init__(self,
                  model_path: str,
@@ -22,14 +23,14 @@ class YOLOv8(BaseTool):
         self.final_cls = list()
 
     ##### yolov8的调用看需求增加cls参数，默认只检测人，物体id要查coco_cat
-    def __call__(self, image: np.ndarray,score_thr:float,cls:list = [0]):
+    def __call__(self, image: np.ndarray, score_thr: float, cls: list = [0]):
         self.score_thr = score_thr
         if len(cls) == 0:
             self.final_cls = [0]
         else:
             self.final_cls = cls
         image, ratio = self.preprocess(image)
-        image = np.expand_dims(image,axis=0)
+        image = np.expand_dims(image, axis=0)
         outputs = self.inference(image)[0]
         outputs = self.postprocess(outputs, ratio)
         return outputs
@@ -66,9 +67,9 @@ class YOLOv8(BaseTool):
         return padded_img, ratio
 
     def postprocess(
-        self,
-        outputs: List[np.ndarray],
-        ratio: float = 1.,
+            self,
+            outputs: List[np.ndarray],
+            ratio: float = 1.,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Do postprocessing for RTMPose model inference.
 
@@ -81,15 +82,15 @@ class YOLOv8(BaseTool):
             - final_boxes (np.ndarray): Final bounding boxes.
             - final_scores (np.ndarray): Final scores.
         """
-        if outputs.ndim == 2 :
-            outputs = np.expand_dims(outputs,axis=0)
+        if outputs.ndim == 2:
+            outputs = np.expand_dims(outputs, axis=0)
         max_wh = 7680
         max_det = 300
         max_nms = 30000
 
         bs = outputs.shape[0]  # batch size
         nc = outputs.shape[1] - 4  # number of classes
-        xc = np.amax(outputs[:, 4:4 + nc],1) > self.score_thr  # candidates
+        xc = np.amax(outputs[:, 4:4 + nc], 1) > self.score_thr  # candidates
 
         output = [np.empty((0, 6))] * bs
         final_boxes = np.array([])
@@ -101,16 +102,18 @@ class YOLOv8(BaseTool):
             # If none remain process next image
             if not x.shape[0]:
                 continue
-            box = x[:,:4]
+            box = x[:, :4]
             cls = x[:, 4:]
 
             box = wh2xy(box)  # (cx, cy, w, h) to (x1, y1, x2, y2)
             if nc > 1:
                 i, j = np.nonzero(cls > self.score_thr)
-                x = np.concatenate((box[i.ravel(), :], x[i.ravel(), 4 + j.ravel(), None], j[:, None].astype(np.float32)), 1)
+                x = np.concatenate(
+                    (box[i.ravel(), :], x[i.ravel(), 4 + j.ravel(), None], j[:, None].astype(np.float32)), 1)
             else:  # best class only
                 i, j = np.nonzero(cls > self.score_thr)
-                x = np.concatenate((box[i.ravel(), :], x[i.ravel(), 4 + j.ravel(), None], j[:, None].astype(np.float32)), 1)
+                x = np.concatenate(
+                    (box[i.ravel(), :], x[i.ravel(), 4 + j.ravel(), None], j[:, None].astype(np.float32)), 1)
             if not x.shape[0]:  # no boxes
                 continue
             sorted_idx = np.argsort(x[:, 4])[::-1][:max_nms]
@@ -148,17 +151,17 @@ class YOLOv8(BaseTool):
                 # final_boxes = np.array(fil_boxes)
                 # final_scores = np.array(fil_scores)
 
-
                 # results = np.concatenate((final_boxes, final_scores.reshape(-1, 1), final_cls_inds.reshape(-1, 1)), axis=1)
         # if self.final_cls==[0]:
         #     return final_boxes,final_scores
         # else:
-        return final_boxes,final_scores,final_cls_inds
+        return final_boxes, final_scores, final_cls_inds
         # results = dict()
         # results['det'] = final_boxes
         # results['scores'] = final_scores
         # results['cls'] = final_cls_inds
         # return results
+
 
 def wh2xy(x):
     y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
@@ -169,12 +172,18 @@ def wh2xy(x):
     return y
 
 
+import time
+
 if __name__ == '__main__':
-    model = YOLOv8(model_path=r"D:\ai_library\ai\models\yolov8_m.onnx")
+    # model = YOLOv8(model_path=r"D:\ai_library\ai\models\yolov8_m.onnx")
+    # model = YOLOv8(model_path=r"D:\yolov8_m2.onnx")
+    model = YOLOv8(model_path=r"C:\Users\84728\Desktop\m_ballaug_v1.2.onnx")
     ball_model = YOLOv8(model_path=r"D:\ai_library\ai\models\b1.onnx", model_input_size=(320, 320))
     video_path = r"C:\Users\84728\Desktop\802125.mp4"
     video_path = r"D:\篮球\篮球\192.168.1.100球出界.mp4"
-    # video_path = r"E:\solidball_video\192.168.1.100_01_20250211173215749\7\7-1.mp4"
+    video_path = r"D:\篮球\long_1957979962486493185.mp4"
+    # video_path = r"C:\Users\84728\Desktop\longjump_0610\StandingLongJump_1837069828510756866_1749521271.mp4"
+    #video_path = r"C:\Users\84728\Documents\WeChat Files\wxid_z1yd99twbh4712\FileStorage\File\2025-07\Volleyball\111136_200211_9_172004_971.mp4"
     cap = cv2.VideoCapture(video_path)
     frame_idx = 0
     # cls = list(range(80))
@@ -208,14 +217,17 @@ if __name__ == '__main__':
         h, w, _ = frame.shape
         detect_img = frame.copy()
         ### 椅子56，人0，球32.
-        boxes,scores,cls_inds = model(frame, 0.05, [0,32])
+        t1 = time.time()
+        boxes, scores, cls_inds = model(frame, 0.1, [0, 2])
+        print('inference', time.time() - t1)
         # print(cls_inds)
-        for box,score,cls in zip(boxes,scores,cls_inds):
+        for box, score, cls in zip(boxes, scores, cls_inds):
             cv2.rectangle(frame, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 255, 0), 2)
-            cv2.putText(frame, str(cls)+str(round(score,2)), (int(box[0]), int(box[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255),2)
-            if cls==0:
-                cx = (box[0]+box[2])/2
-                cy = (box[1]+box[3])/2
+            cv2.putText(frame, str(cls) + str(round(score, 2)), (int(box[2]), int(box[3])), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                        (0, 0, 255), 2)
+            if cls == 0:
+                cx = (box[0] + box[2]) / 2
+                cy = (box[1] + box[3]) / 2
                 # 根据中心点裁剪区域（限制在图像范围内）
                 src_y1 = max(int(cy - t_size / 2), 0)
                 src_y2 = min(int(cy + t_size / 2), h)
@@ -229,8 +241,8 @@ if __name__ == '__main__':
                 #     cv2.rectangle(detect_img, (int(ball_box[0]), int(ball_box[1])), (int(ball_box[2]), int(ball_box[3])), (0, 255, 0), 2)
         # box.astype(int)
         cv2.imshow('frame', frame)
-        cv2.waitKey(1)
-        cv2.imshow('edges', imgs)
-        cv2.waitKey(1)
+        cv2.waitKey(0)
+        # cv2.imshow('edges', imgs)
+        # cv2.waitKey(1)
         # if cv2.waitKey(1) & 0xFF == ord('q'):
         #     break

@@ -1,5 +1,6 @@
 import time
 import sys
+
 sys.path.append('../../')
 from ai.pose import RTMDet, RTMPose, YOLOX, YOLOv8, YOLOv8_byteTrack
 from ai.pose.tracker.deep_sort import DeepSort
@@ -8,6 +9,7 @@ import cv2
 import os
 
 import numpy as np
+
 
 def compute_iou(box1, box2):
     # box格式为[x1, y1, x2, y2]
@@ -28,6 +30,7 @@ def compute_iou(box1, box2):
 
     return iou
 
+
 class TopDownEstimation:
     def __init__(self, gpu_id=0, det_path="", pose_path="", track_path=""):
         """
@@ -44,19 +47,19 @@ class TopDownEstimation:
         self.det_model = None
         self.pose_model = None
         self.tracker = None
-        det_size = (640,640)
+        det_size = (640, 640)
 
         if os.path.exists(det_path) and det_path != "":
             if "yolo" in det_path:
                 if 'yolox' in det_path:
                     if "tiny" in det_path:
-                        det_size = (416,416)
+                        det_size = (416, 416)
                     else:
-                        det_size = (640,640)
-                    self.det_model = YOLOX(model_path=det_path, gpu_id=gpu_id,model_input_size=det_size)
+                        det_size = (640, 640)
+                    self.det_model = YOLOX(model_path=det_path, gpu_id=gpu_id, model_input_size=det_size)
                 elif 'yolov8_m' in det_path:
                     det_size = (640, 640)
-                    self.det_model = YOLOv8(model_path=det_path, gpu_id=gpu_id,model_input_size=det_size)
+                    self.det_model = YOLOv8(model_path=det_path, gpu_id=gpu_id, model_input_size=det_size)
                 elif 'yolov8_n' in det_path:
                     det_size = (640, 640)
                     self.det_model = YOLOv8_byteTrack(model_path=det_path)
@@ -66,17 +69,17 @@ class TopDownEstimation:
                     det_size = (320, 320)
                 else:
                     det_size = (640, 640)
-                self.det_model = RTMDet(model_path=det_path, gpu_id=gpu_id,model_input_size=det_size)
+                self.det_model = RTMDet(model_path=det_path, gpu_id=gpu_id, model_input_size=det_size)
         else:
             print("det_path no exist", det_path)
         if os.path.exists(pose_path) and pose_path != "":
             if "hand" in pose_path:
-                in_size = (256,256)
+                in_size = (256, 256)
             elif "wholebody" in pose_path or "l_halpe26" in pose_path or "m_halpe262" in pose_path:
-                in_size = (288,384)
+                in_size = (288, 384)
             else:
-                in_size = (192,256)
-            self.pose_model = RTMPose(model_path=pose_path, gpu_id=gpu_id,model_input_size=in_size)
+                in_size = (192, 256)
+            self.pose_model = RTMPose(model_path=pose_path, gpu_id=gpu_id, model_input_size=in_size)
             self.init_statue = True
         else:
             print("pose_path no exist", pose_path)
@@ -88,6 +91,7 @@ class TopDownEstimation:
         test = np.expand_dims(test, axis=-1)
         test = np.repeat(test, 3, axis=-1)
         self.estimate(test, 0.5)
+
     def track(self, img, bbox):
         if self.tracker is None:
             print("没有加载追踪模型")
@@ -96,20 +100,20 @@ class TopDownEstimation:
             ##### 注意！！！，进去的bbox和出来的bbox顺序不一定一致，
             ##### 且位置有些偏差，通过iou过滤（用compute_iou函数），建议取95为阈值
             track_bbox, ids = self.tracker.update(bbox, img)
-            return track_bbox,ids
+            return track_bbox, ids
             # tracks = self.tracker.update(bbox, img)
             # return tracks
 
-    def det_es(self, img, score_thr,cls=[0]):
+    def det_es(self, img, score_thr, cls=[0]):
         results = dict()
-        if type(self.det_model).__name__=='YOLOv8':
-            dets, scores, clses = self.det_model(img, score_thr=score_thr,cls=cls)
+        if type(self.det_model).__name__ == 'YOLOv8':
+            dets, scores, clses = self.det_model(img, score_thr=score_thr, cls=cls)
             results['det'] = dets
             results['scores'] = scores
             results['cls'] = clses
             return results
-        elif type(self.det_model).__name__=='YOLOv8_byteTrack':
-            dets, scores, clses,track_ids = self.det_model(img, score_thr=score_thr,cls=cls)
+        elif type(self.det_model).__name__ == 'YOLOv8_byteTrack':
+            dets, scores, clses, track_ids = self.det_model(img, score_thr=score_thr, cls=cls)
             results['det'] = dets
             results['scores'] = scores
             results['cls'] = clses
@@ -122,28 +126,27 @@ class TopDownEstimation:
             return results
         # results = self.det_model(img, score_thr=score_thr, cls=cls)
 
-
     def pose_es(self, img, bbox):
         ### 取追踪结果的框
         for b in bbox:
-            if len(b)>4:
+            if len(b) > 4:
                 b = b[:4]
-        keypoints, scores = self.pose_model(img,bbox)
+        keypoints, scores = self.pose_model(img, bbox)
         return keypoints, scores
 
     def estimate(self, img, score_thr, track=False):
         results = list()
         if not self.init_statue:
             return results
-        if type(self.det_model).__name__=='YOLOv8':
-            det, det_score,cls = self.det_model(img, score_thr=score_thr)
-            det = [box.tolist() for i,box in enumerate(det) if cls[i] == 0]
+        if type(self.det_model).__name__ == 'YOLOv8':
+            det, det_score, cls = self.det_model(img, score_thr=score_thr)
+            det = [box.tolist() for i, box in enumerate(det) if cls[i] == 0]
             track_ids = []
             if track and self.tracker is not None:
                 det, track_ids = self.track(img, det)
             # print('track',track_ids)
-        elif type(self.det_model).__name__=='YOLOv8_n':
-            det, det_score,cls,track_ids = self.det_model(img, score_thr=score_thr)
+        elif type(self.det_model).__name__ == 'YOLOv8_n':
+            det, det_score, cls, track_ids = self.det_model(img, score_thr=score_thr)
             det = det.tolist()
             if track and self.tracker is not None:
                 det, track_ids = self.track(img, det)
@@ -167,13 +170,12 @@ class TopDownEstimation:
                 result['det_score'] = det_score[i]
             result['kps'] = kps[i]
             result['kps_score'] = kps_score[i]
-            if len(track_ids)>0:
+            if len(track_ids) > 0:
                 result['track_id'] = int(track_ids[i])
             else:
                 result['track_id'] = 0
             results.append(result)
         return results
-
 
     def release(self):
         if self.det_model is not None:
@@ -185,9 +187,11 @@ class TopDownEstimation:
 
 
 if __name__ == '__main__':
-    pose = TopDownEstimation(det_path=r'D:\ai\ai\models\yolov8_m.engine', #C:\Users\84728\Desktop\yolov8_11_e51.onnx  D:\ai\ai\models\yolov8.onnx
-                             pose_path=r'D:\ai\ai\models\rtmpose_m_halpe26.engine',
-                             track_path=r'D:\ai\ai\models\deepsort.engine')
+    pose = TopDownEstimation(  #det_path=r'D:\ai\ai\models\yolov8_m.engine',
+        det_path=r'D:\yolov8_m.onnx',
+        #C:\Users\84728\Desktop\yolov8_11_e51.onnx  D:\ai\ai\models\yolov8.onnx
+        pose_path=r'D:\ai\ai\models\rtmpose_m_halpe26.onnx',
+        track_path=r'D:\ai\ai\models\deepsort.onnx')
     # pspnet = PSPNet(onnx_model=r'D:\ai\ai\PSPNet.onnx')
     # frame = cv2.imread(r'C:\Users\84728\Desktop\no_detection\StandingLongJump_1846809887086522369_1729843217_190.jpg')
     # results = pose.estimate(frame, 0.1, True)
@@ -210,50 +214,62 @@ if __name__ == '__main__':
     #     "5": [[1766, 824], [2170, 796], [2520, 850], [2086, 880]]
     # }
     cap = cv2.VideoCapture(r'C:\Users\84728\Desktop\145\短跑\192.168.20.145_01_20240801144158821.mp4')
-    frame_idx = 0
-    while cap.isOpened():
-        success, frame = cap.read()
-        frame_idx += 1
-        if not success:
-            break
-        t1 = time.time()
-        # dets,scores,cls = pose.det_es(frame, 0.3, list(range(81)))
-        ### 椅子56，人0，
-        results = pose.estimate(frame, 0.3, True)
-        # boxes = []
-        # for result in results:
-        #     boxes.append(result['det'])
-        #     print(result['track_id'])
-        # l = pose.track(frame, boxes)
-        # print('len',len(dets))
-        # for i,box in enumerate(dets):
-        #     frame = cv2.rectangle(frame, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 255, 0),3)
-        #     frame = cv2.putText(frame, str(cls[i]),  (int(box[0]), int(box[1])),
-        #                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-        for result in results:
-            # body = frame[int(result['det'][1]):int(result['det'][3]), int(result['det'][0]):int(result['det'][2])]
-            # pspnet_result = pspnet(body)
-            # pspnet_result = pspnet_result*10
-            # cv2.imshow("pspnet_result", pspnet_result)
-            # cv2.waitKey(0)
-            frame = cv2.rectangle(frame, (int(result['det'][0]), int(result['det'][1])), (int(result['det'][2]), int(result['det'][3])), (0, 255, 0),3)
-            frame = cv2.putText(frame, str(result['track_id']), (int(result['det'][0]), int(result['det'][1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            for ids,kps in enumerate(result['kps']):
-                frame = cv2.circle(frame, (int(kps[0]), int(kps[1])), 3, (0, 0, 255), -1)
-                frame = cv2.putText(frame, str(ids), (int(kps[0]), int(kps[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 222, 255),
-                                    2)
-        # for rw_id, runway in runway_info.items():
-        #     runway = np.array(runway, dtype=np.int32)
-        #     for i,run in enumerate(runway):
-        #         runway[i] =(int(run[0]*(1920/2560)),(run[1]*(1080/1440)))
-        #     frame = cv2.polylines(frame, [runway], True, (0, 255, 0), 2)
-        #     frame = cv2.putText(frame, str(rw_id), (int(runway[0][0]),int(runway[0][1])), cv2.FONT_HERSHEY_SIMPLEX, 1,(0, 255, 255), 3)
+    video_path = r"C:\Users\84728\Desktop\longjump_0610\StandingLongJump_1846809934033367041_1749521550.mp4"
+    video_p = r"C:\Users\84728\Documents\WeChat Files\wxid_z1yd99twbh4712\FileStorage\File\2025-07\Volleyball"
+    files = os.listdir(video_p)
+    for file in files:
+        if file.endswith(".mp4"):
+            video_path = os.path.join(video_p, file)
+        else:
+            continue
+        cap = cv2.VideoCapture(video_path)
+        frame_idx = 0
+        while cap.isOpened():
+            success, frame = cap.read()
+            frame_idx += 1
+            if not success:
+                break
+            t1 = time.time()
+            # dets,scores,cls = pose.det_es(frame, 0.3, list(range(81)))
+            ### 椅子56，人0，
+            results = pose.estimate(frame, 0.3, True)
+            # boxes = []
+            # for result in results:
+            #     boxes.append(result['det'])
+            #     print(result['track_id'])
+            # l = pose.track(frame, boxes)
+            # print('len',len(dets))
+            # for i,box in enumerate(dets):
+            #     frame = cv2.rectangle(frame, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 255, 0),3)
+            #     frame = cv2.putText(frame, str(cls[i]),  (int(box[0]), int(box[1])),
+            #                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            for result in results:
+                # body = frame[int(result['det'][1]):int(result['det'][3]), int(result['det'][0]):int(result['det'][2])]
+                # pspnet_result = pspnet(body)
+                # pspnet_result = pspnet_result*10
+                # cv2.imshow("pspnet_result", pspnet_result)
+                # cv2.waitKey(0)
+                frame = cv2.rectangle(frame, (int(result['det'][0]), int(result['det'][1])),
+                                      (int(result['det'][2]), int(result['det'][3])), (0, 255, 0), 3)
+                frame = cv2.putText(frame, str(result['track_id']), (int(result['det'][0]), int(result['det'][1])),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                for ids, kps in enumerate(result['kps']):
+                    frame = cv2.circle(frame, (int(kps[0]), int(kps[1])), 3, (0, 0, 255), -1)
+                    frame = cv2.putText(frame, str(ids), (int(kps[0]), int(kps[1])), cv2.FONT_HERSHEY_SIMPLEX, 1,
+                                        (0, 222, 255),
+                                        2)
+            # for rw_id, runway in runway_info.items():
+            #     runway = np.array(runway, dtype=np.int32)
+            #     for i,run in enumerate(runway):
+            #         runway[i] =(int(run[0]*(1920/2560)),(run[1]*(1080/1440)))
+            #     frame = cv2.polylines(frame, [runway], True, (0, 255, 0), 2)
+            #     frame = cv2.putText(frame, str(rw_id), (int(runway[0][0]),int(runway[0][1])), cv2.FONT_HERSHEY_SIMPLEX, 1,(0, 255, 255), 3)
 
-        # for i in l:
-        #     frame = cv2.putText(frame, str(i[4]), (int(i[0]), int(i[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-        cv2.imshow("frame", frame)
-        cv2.waitKey(1)
+            # for i in l:
+            #     frame = cv2.putText(frame, str(i[4]), (int(i[0]), int(i[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            cv2.imshow("frame", frame)
+            cv2.waitKey(1)
 
-        if frame_idx % 5 == 0:
-            pose.tracker._reset()
-        #print(len(results))
+            # if frame_idx % 5 == 0:
+            #     pose.tracker._reset()
+            #print(len(results))

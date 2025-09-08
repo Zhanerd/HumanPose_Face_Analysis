@@ -68,12 +68,12 @@ class Extractor:
 
         blob = cv2.dnn.blobFromImages(imgs, scalefactor=1.0 / self.input_std, size=self.input_size,mean=[self.input_mean, self.input_mean, self.input_mean], swapRB=True)
         blob = blob.transpose(0, 1, 3, 2)
-        if self.backend=='tensorrt':
+        if self.backend == 'tensorrt':
             blob = torch.from_numpy(blob).to('cuda')
             with torch.no_grad():
                 outputs = self.model(blob)
             net_out = [output.cpu().numpy() for output in outputs]
-        elif self.backend=='onnxruntime':
+        elif self.backend == 'onnxruntime':
             net_out = self.model.run(self.output_names, {self.input_names[0]: blob})[0]
         else:
             print("unknown backend")

@@ -70,87 +70,87 @@ class FaceRecognition:
 
     # 检测人脸
     def detect(self, image, det_thresh=0.5, nms_thr=None, top_n=0, quality=False, quality_thre=0.7, std_thre=0.4):
-        w, h = image.shape[:2]
-        if w < self.det_size[0] or h < self.det_size[1]:
-            padw = max(self.det_size[0] - w, 0)
+        h, w = image.shape[:2]
+        if h < self.det_size[0] or w < self.det_size[1]:
             padh = max(self.det_size[0] - h, 0)
-            img = cv2.copyMakeBorder(image, 0, max(padw, 0), 0, max(padh, 0), cv2.BORDER_CONSTANT, value=[0, 0, 0])
+            padw = max(self.det_size[0] - w, 0)
+            img = cv2.copyMakeBorder(image, 0, max(padh, 0), 0, max(padw, 0), cv2.BORDER_CONSTANT, value=[0, 0, 0])
             faces = self.model.batch_get(img, det_thresh, nms_thr)
         else:
             faces = self.model.batch_get(image, det_thresh, nms_thr)
         # 筛选最大的top_n个人脸
-        if top_n > 0 and top_n < len(faces):
-            def face_size(face):
-                size = (face["bbox"][2] - face["bbox"][0]) * (face["bbox"][3] - face["bbox"][1])
+        if 0 < top_n < len(faces):
+            def face_size(_face):
+                size = (_face["bbox"][2] - _face["bbox"][0]) * (_face["bbox"][3] - _face["bbox"][1])
                 return -1 * size  # 从大到小排序
 
             faces.sort(key=face_size)
             faces = faces[:top_n]
         height, width = image.shape[:2]
-        results = list()
-        for face in faces:
-            result = dict()
-            result["error_code"] = 0
-            result["error_message"] = "success"
+        face_results = list()
+        for f in faces:
+            f_result = dict()
+            f_result["error_code"] = 0
+            f_result["error_message"] = "success"
             # 获取人脸属性
-            result["bbox"] = np.array(face.bbox).astype(np.int32).tolist()
-            result["kps"] = np.array(face.kps).astype(np.int32).tolist()
+            f_result["bbox"] = np.array(f.bbox).astype(np.int32).tolist()
+            f_result["kps"] = np.array(f.kps).astype(np.int32).tolist()
             if self.quality_model and quality:
-                result["bbox"] = [0 if i < 0 else i for i in result["bbox"]]
-                face_img = image[result["bbox"][1]:result["bbox"][3], result["bbox"][0]:result["bbox"][2]]
+                f_result["bbox"] = [0 if i < 0 else i for i in f_result["bbox"]]
+                face_img = image[f_result["bbox"][1]:f_result["bbox"][3], f_result["bbox"][0]:f_result["bbox"][2]]
 
                 if self.direct_path is not None:
                     pitch, yaw, roll = self.direct_path.inference(face_img)
                 else:
-                    pitch, yaw, roll = self.face_direction(result, image.shape[:2])
+                    pitch, yaw, roll = self.face_direction(f_result, image.shape[:2])
                 scores = self.quality_model.inference(face_img)
                 score = round(np.mean(scores), 3)
                 std = np.std(scores)
-                result["scores"] = score
-                if not self.is_centered(result["bbox"], width, height):
-                    result["error_code"] = 100  # 人脸未在中间
-                    result["error_message"] = "人脸未在中间"
-                elif not self.bbox_ratio(result["bbox"], width, height):
-                    result["error_code"] = 200  # 人脸框过小
-                    result["error_message"] = "人脸框过小"
+                f_result["scores"] = score
+                if not self.is_centered(f_result["bbox"], width, height):
+                    f_result["error_code"] = 100  # 人脸未在中间
+                    f_result["error_message"] = "人脸未在中间"
+                elif not self.bbox_ratio(f_result["bbox"], width, height):
+                    f_result["error_code"] = 200  # 人脸框过小
+                    f_result["error_message"] = "人脸框过小"
                 elif 75 < abs(pitch) < 80:
                     # print("pitch",pitch)
-                    result["error_code"] = 301  # 仰角过大
-                    result["error_message"] = "仰角过大 {}".format(abs(pitch))
+                    f_result["error_code"] = 301  # 仰角过大
+                    f_result["error_message"] = "仰角过大 {}".format(abs(pitch))
                 elif 150 > abs(yaw) > 80:
                     # print("yaw", yaw)
-                    result["error_code"] = 302  # 偏航角过大
-                    result["error_message"] = "偏航角过大 {}".format(abs(yaw))
+                    f_result["error_code"] = 302  # 偏航角过大
+                    f_result["error_message"] = "偏航角过大 {}".format(abs(yaw))
                 elif 65 < abs(roll) < 70:
                     # print("roll", roll)
-                    result["error_code"] = 303  # 翻滚角过大
-                    result["error_message"] = "翻滚角过大 {}".format(abs(roll))
+                    f_result["error_code"] = 303  # 翻滚角过大
+                    f_result["error_message"] = "翻滚角过大 {}".format(abs(roll))
                 else:
                     # print("face_scores", std, score)
                     if score < quality_thre or std > std_thre:  # 加入方差确保质量的稳定
-                        result["error_code"] = 400  # 人脸置信度过低，可解释为有遮挡或者光线不良或者清晰度不佳
-                        result["error_message"] = "有遮挡或者光线不良或者清晰度不佳,  score : {}, std: {}".format(score,
-                                                                                                                  std)
+                        f_result["error_code"] = 400  # 人脸置信度过低，可解释为有遮挡或者光线不良或者清晰度不佳
+                        f_result["error_message"] = "有遮挡或者光线不良或者清晰度不佳,  score : {}, std: {}".format(score,
+                                                                                                                    std)
                     else:
-                        result["error_code"] = 0
-                        result["error_message"] = "success"
-            result["det_score"] = round(float(face.det_score), 2)
-            embedding = np.array(face.embedding).reshape((1, -1))
+                        f_result["error_code"] = 0
+                        f_result["error_message"] = "success"
+            f_result["det_score"] = round(float(f.det_score), 2)
+            embedding = np.array(f.embedding).reshape((1, -1))
             embedding = normalize(embedding)
-            result["embedding"] = embedding
-            results.append(result)
-        return results
+            f_result["embedding"] = embedding
+            face_results.append(f_result)
+        return face_results
 
     def detect_queue(self, image, det_thresh=0.5, nms_thr=None, top_n=1, quality=False, quality_thre=0.5,
                      std_thre=0.35):
-        w, h = image.shape[:2]
-        if w < self.det_size[0] or h < self.det_size[1]:
-            padw = self.det_size[0] - w
-            padh = self.det_size[0] - h
-            img = cv2.copyMakeBorder(image, 0, max(padw, 0), 0, max(padh, 0), cv2.BORDER_CONSTANT, value=[0, 0, 0])
-            faces = self.model.batch_get_queue(img, det_thresh, nms_thr)
+        h, w = image.shape[:2]
+        if h < self.det_size[0] or w < self.det_size[1]:
+            padh = max(self.det_size[0] - h, 0)
+            padw = max(self.det_size[0] - w, 0)
+            img = cv2.copyMakeBorder(image, 0, max(padh, 0), 0, max(padw, 0), cv2.BORDER_CONSTANT, value=[0, 0, 0])
+            faces = self.model.batch_get(img, det_thresh, nms_thr)
         else:
-            faces = self.model.batch_get_queue(image, det_thresh, nms_thr)
+            faces = self.model.batch_get(image, det_thresh, nms_thr)
         # 筛选最大的top_n个人脸
         if top_n > 0 and top_n < len(faces):
             def face_size(face):
@@ -430,41 +430,125 @@ class FaceRecognition:
 
 
 if __name__ == '__main__':
-    face_recognitio = FaceRecognition(det_path=r'D:\ai\ai\5060_models\face_det_10g.engine',
-                                      reg_path=r'D:\ai\ai\5060_models\face_w600k_r50.engine',
-                                      quality_path=r'D:\ai\ai\5060_models\face_quality_assessment.onnx',
+    face_recognitio = FaceRecognition(det_path=r'D:\ai\ai\models\face_det_10g.engine',
+                                      reg_path=r'D:\ai\ai\models\face_w600k_r50.engine',
+                                      quality_path=r'D:\ai\ai\models\face_quality_assessment.onnx',
                                       gpu_id=0)
-    file_path = r'C:\Users\84728\Desktop\test_face'
-    # url = 'https://tse1-mm.cn.bing.net/th/id/OIP-C.YgnTN8sMbvwBF7hEj5vOowHaLH?rs=1&pid=ImgDetMain'
-    # cap = cv2.VideoCapture(url)
-    # _, image = cap.read()
-    files = os.listdir(file_path)
-    for file in files:
-        print(file)
-        # file = r'C:\Users\84728\Desktop\test_face\524.png'
-        if file.endswith('.jpg') or file.endswith('.png'):
-            img = cv2.imread(os.path.join(file_path, file))
+    # file_path = r'C:\Users\84728\Desktop\test_face'
+    # # url = 'https://tse1-mm.cn.bing.net/th/id/OIP-C.YgnTN8sMbvwBF7hEj5vOowHaLH?rs=1&pid=ImgDetMain'
+    # # cap = cv2.VideoCapture(url)
+    # # _, image = cap.read()
+    # files = os.listdir(file_path)
+    # for file in files:
+    #     print(file)
+    #     if file.endswith('.jpg') or file.endswith('.png'):
+    #         img = cv2.imread(os.path.join(file_path, file))
+    #
+    #         print(img.shape)
+    #         t1 = time.time()
+    #         result = face_recognitio.detect(img,quality=True)
+    #         print(time.time()-t1)
 
-            print(img.shape)
-            t1 = time.time()
-            result = face_recognitio.detect(img,quality=True)
-            print(time.time()-t1)
-
-    db = np.load(r'D:\ai_library\36m_face.npy', allow_pickle=True).item()
-    pid = list(db.keys())
-    P = list()
-    ge = list(db.values())
+    db = np.load(r'C:\Users\84728\Desktop\back - 副本\face\face_db.npy', allow_pickle=True)
+    pid = []
+    ge = []
+    for face in db:
+        pid.append(face['user_name'])
+        ge.append(face['feature'])
+    # pid = list(db.keys())
+    # P = list()
+    # ge = list(db.values())
     ge_np = np.array(ge, dtype=float)
     ge_np = ge_np.reshape(-1, 512)
     log = None
     last_log = None
-    videopath = r"D:\m36_longrun\228.mp4"
+    file = r'C:\Users\84728\Desktop\test_face\4323.jpg'
+    file = r'C:\Users\84728\Desktop\testface\a01c.png'
+    if file.endswith('.jpg') or file.endswith('.png'):
+        # img = cv2.imread(os.path.join(file_path, file))
+        img = cv2.imread(file)
+        print(img.shape)
+        t1 = time.time()
+        results = face_recognitio.detect(img, quality=True)
+        print(time.time() - t1)
+        for result in results:
+            match_info = face_recognitio.match_feature(result['embedding'], ge_np, pid,
+                                                       thre=0.4)
+
+    # ge_np2 = np.vstack([ge_np,ge_np])
+    # in_np = np.repeat(ge_np[:1,:], repeats=3, axis=0)
+    # test2 = ge_np[:2, :]
+    # test1 = ge_np[:1, :]
+    # t = time.time()
+    # for i in range(10000):
+    #     face_recognitio.match_feature(test1, ge_np, pid,
+    #                                   thre=0.65)
+    # print(time.time() - t)
+    # t = time.time()
+    # for i in range(10000):
+    #     face_recognitio.match_feature(test1, ge_np2, pid,
+    #                                   thre=0.65)
+    # print(time.time() - t)
+    # t = time.time()
+    # for i in range(10000):
+    #     face_recognitio.match_feature(test1, ge_np, pid,
+    #                                   thre=0.65)
+    #     face_recognitio.match_feature(test1, ge_np, pid,
+    #                                   thre=0.65)
+    # print(time.time() - t)
+    # t = time.time()
+    # for i in range(10000):
+    #     face_recognitio.match_feature(test2, ge_np, pid,
+    #                                   thre=0.65)
+    # print(time.time() - t)
+    # t = time.time()
+    # for i in range(10000):
+    #     face_recognitio.match_feature(test1, ge_np2, pid,
+    #                                   thre=0.65)
+    #     face_recognitio.match_feature(test1, ge_np2, pid,
+    #                                   thre=0.65)
+    # print(time.time() - t)
+    # t = time.time()
+    # for i in range(10000):
+    #     face_recognitio.match_feature(test2, ge_np2, pid,
+    #                                   thre=0.65)
+    # print(time.time() - t)
+    # t = time.time()
+    # for i in range(10000):
+    #     for j in range(3):
+    #         face_recognitio.match_feature(test1, ge_np, pid,
+    #                                   thre=0.65)
+    # print(time.time() - t)
+    # t = time.time()
+    # for i in range(10000):
+    #     face_recognitio.match_feature(in_np, ge_np, pid,
+    #                                   thre=0.65)
+    # print(time.time() - t)
+    # t = time.time()
+    # for i in range(10000):
+    #     for j in range(3):
+    #         face_recognitio.match_feature(test1, ge_np2, pid,
+    #                                   thre=0.65)
+    # print(time.time() - t)
+    # t = time.time()
+    # for i in range(10000):
+    #     face_recognitio.match_feature(in_np, ge_np2, pid,
+    #                                   thre=0.65)
+    # print(time.time() - t)
+    videopath = r"C:\Users\84728\Desktop\d94.mp4"
+    fourcc = cv2.VideoWriter_fourcc(*'MP4V')
+    # 创建VideoWriter对象
+    out = cv2.VideoWriter('output12.mp4', fourcc, 25, (1440, 720))
     cap = cv2.VideoCapture(videopath)
+    fsp = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     frame_idx = 0
-    start_t = 11375
+    start_t = 0
     end_t = 500000
     while cap.isOpened():
         ret, frame = cap.read()
+        if frame is None:
+            break
         frame_idx += 1
         # if frame_idx < start_t + 5000:
         #     continue
@@ -472,8 +556,8 @@ if __name__ == '__main__':
         #     break
         results = face_recognitio.detect(frame, det_thresh=0.4)
         for result in results:
-            match_info = face_recognitio.match_multi_feature(result['embedding'], ge_np, pid,
-                                                       thre=0.4,top_k=3)
+            match_info = face_recognitio.match_feature(result['embedding'], ge_np, pid,
+                                                       thre=0.65)
             if len(match_info) > 0:
                 name = match_info[0]['person_id']
             else:
@@ -481,7 +565,7 @@ if __name__ == '__main__':
             frame = cv2.rectangle(frame, (result['bbox'][0], result['bbox'][1]), (result['bbox'][2], result['bbox'][3]),
                                   (0, 0, 255), 2)
             if name != '':
-                frame = cv2.putText(frame, str(name), (result['bbox'][0], result['bbox'][1]), cv2.FONT_HERSHEY_SIMPLEX,
+                frame = cv2.putText(frame, str(name)+str(match_info[0]['similarity']), (result['bbox'][0], result['bbox'][1]), cv2.FONT_HERSHEY_SIMPLEX,
                                     1,
                                     (0, 0, 255), 2)
                 log = (match_info, (frame_idx - start_t) / 25)
@@ -492,9 +576,11 @@ if __name__ == '__main__':
                     if last_log[0][0]['person_id'] != log[0][0]['person_id']:
                         print(log)
                     last_log = log
-        cv2.imshow('a', cv2.resize(frame, (1440, 720)))
-        cv2.waitKey(1)
-
+        resf = cv2.resize(frame, (1440, 720))
+        out.write(resf)
+        # cv2.imshow('a', cv2.resize(frame, (1440, 720)))
+        # cv2.waitKey(1)
+    cap.release()
     # #img = cv2.imdecode(np.fromfile('http://192.168.7.170:8077/file/20240829/814a4790ead94cfaae34b5f5029f6d4c.jpg', dtype=np.uint8), -1)
     # img = cv2.imread(r'D:\ai\ai\models\bcaa68ec0c3146f4b5b32c606ab0909a.png')
     # t1 = time.time()
